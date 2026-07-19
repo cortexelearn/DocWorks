@@ -1,0 +1,24 @@
+Parent,Find,Qty,UOM,PartNumber,Rev,Description,MakeBuy,Material,Remarks
+,,1,EA,MOT-3000,C,"BLDC Motor Assembly, Housed",Make,,Serialized
+MOT-3000,10,1,EA,STA-3100,A,Stator Winding Assembly,Make,,Wound / Impregnated / Tested
+MOT-3000,20,1,EA,ROT-3120,A,Rotor Assembly,Make,Various,Balanced / Ground
+MOT-3000,30,2,EA,BRG-6002,A,Rotor Bearing,Buy,440C Stainless Steel,Matched / Approved Source
+MOT-3000,40,1,EA,HSG-3200,A,Motor Housing,Make,6061-T6 Aluminum,Hard Anodize
+MOT-3000,50,1,EA,END-3210,A,Front Endbell,Make,6061-T6 Aluminum,Hard Anodize
+MOT-3000,60,1,EA,END-3220,A,Rear Endbell,Make,6061-T6 Aluminum,Hard Anodize
+MOT-3000,70,1,EA,SPR-3230,A,Bearing Wave Spring,Buy,17-7PH,Preload per drawing
+MOT-3000,80,1,EA,CON-3250,A,"Connector, Circular",Buy,,D38999 Series
+MOT-3000,90,1,EA,HDW-3260,A,Motor Hardware Kit,Buy,,Fastener set
+STA-3100,10,1,EA,LAM-3110,B,Stator Lamination Stack Assembly,Make,,
+STA-3100,20,AR,LB,WIR-3115,A,Magnet Wire,Buy,Class H Copper,Gauge per winding spec
+STA-3100,30,1,EA,INS-3113,A,Slot Insulation Set,Buy,Nomex / Kapton,Class H
+STA-3100,40,1,EA,LEA-3240,A,"Leadwire Set, PTFE",Buy,PTFE / Silver-Plated Cu,Cut length per drawing
+STA-3100,50,AR,EA,LAC-3117,A,Lacing Cord,Buy,Polyester,Per workmanship std
+STA-3100,60,AR,GM,VAR-3114,A,Impregnation Varnish,Buy,Class H Varnish,"Record lot, cycle"
+LAM-3110,10,120,EA,LAM-3111,A,Electrical Steel Lamination,Buy,M19,Insulated
+LAM-3110,20,1,EA,ADH-3112,A,Bonding Epoxy,Buy,High Temp,Bond Stack
+ROT-3120,10,1,EA,SHA-3121,A,Rotor Shaft,Make,17-4PH Stainless Steel,Inspect journals and datums
+ROT-3120,20,8,EA,MAG-3122,A,Permanent Magnet,Buy,"NdFeB, high-temperature grade",Polarity-controlled matched set
+ROT-3120,30,1,EA,SLV-3123,A,Magnet Retention Sleeve,Make/Buy,Nonmagnetic high-strength alloy,Bonded over magnet OD
+ROT-3120,40,AR,GM,ADH-3124,A,Magnet Bonding Epoxy,Buy,Structural high-temperature epoxy,"Record lot, mix, cure"
+ROT-3120,50,AR,GM,ADH-3125,A,Sleeve Bonding Epoxy,Buy,Structural high-temperature epoxy,"Record lot, mix, cure"

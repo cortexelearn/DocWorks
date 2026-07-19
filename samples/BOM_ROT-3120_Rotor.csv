@@ -1,0 +1,7 @@
+Parent,Find,Qty,UOM,PartNumber,Rev,Description,MakeBuy,Material,Remarks
+,,1,EA,ROT-3120,A,Rotor Assembly,Make,Various,Balanced / Ground
+ROT-3120,10,1,EA,SHA-3121,A,Rotor Shaft,Make,17-4PH Stainless Steel,Inspect journals and datums
+ROT-3120,20,8,EA,MAG-3122,A,Permanent Magnet,Buy,"NdFeB, high-temperature grade",Polarity-controlled matched set
+ROT-3120,30,1,EA,SLV-3123,A,Magnet Retention Sleeve,Make/Buy,Nonmagnetic high-strength alloy,Bonded over magnet OD
+ROT-3120,40,AR,GM,ADH-3124,A,Magnet Bonding Epoxy,Buy,Structural high-temperature epoxy,"Record lot, mix, cure"
+ROT-3120,50,AR,GM,ADH-3125,A,Sleeve Bonding Epoxy,Buy,Structural high-temperature epoxy,"Record lot, mix, cure"
