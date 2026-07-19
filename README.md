@@ -10,8 +10,8 @@ Family Tree (F-), Parts List (P-), Travelers (TRV-), and Work Instructions (WI-)
 4. Your app appears at `https://<user>.github.io/docworks/` within ~1 minute.
 
 ## Local testing
-Opening `index.html` directly from disk (file://) will NOT work — the browser blocks
-Babel from fetching `app.jsx`. Serve it instead:
+Opening `index.html` directly from disk (file://) mostly works now that the app is
+precompiled, but for full fidelity serve it:
 ```
 cd docworks && python -m http.server 8000
 ```
@@ -24,8 +24,9 @@ then open http://localhost:8000. GitHub Pages serves it correctly by default.
   bundles all libraries for fully offline use.
 - `samples/` contains three test BOM CSVs and three drawing PDFs — drag them in to try
   the full pipeline (drop all three DWG PDFs together to watch the BOM assemble).
-- In-browser Babel compiles the app on load (~1–2 s). Fine for a prototype; the
-  desktop build will ship precompiled.
+- The app ships precompiled (app.js) — no in-browser compile step. app.jsx remains
+  in the repo as the editable source; recompile with:
+  `tsc --jsx react --allowJs --target es2020 --module none --outFile app.js app.jsx`
 - Custom logic: Settings → Export templates JSON, edit, re-import (defaults untouched).
 - Local LLM assist (optional, import-edge only): point Settings at an Ollama-style
   endpoint, default http://localhost:11434. Note: a page served over https cannot
