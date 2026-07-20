@@ -1,3 +1,4 @@
+(() => {
 "use strict";
 const { useState, useMemo, useCallback, useRef } = React;
 const XLSX = window.XLSX;
@@ -2393,3 +2394,5 @@ function DocWorks() {
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(DocWorks, null));
 
 window.__docworksLoaded = true;
+
+})();

@@ -27,6 +27,8 @@ then open http://localhost:8000. GitHub Pages serves it correctly by default.
 - The app ships precompiled (app.js) — no in-browser compile step. app.jsx remains
   in the repo as the editable source; recompile with:
   `tsc --jsx react --allowJs --target es2020 --module none --outFile app.js app.jsx`
+  then wrap the whole file in an IIFE -- `(() => { ... })();` -- so its top-level
+  consts (e.g. XLSX) do not collide with library globals.
 - Custom logic: Settings → Export templates JSON, edit, re-import (defaults untouched).
 - Local LLM assist (optional, import-edge only): point Settings at an Ollama-style
   endpoint, default http://localhost:11434. Note: a page served over https cannot
