@@ -254,13 +254,13 @@ function makeConfigs(bom) {
     { id: "actuator", name: "Full Actuator Assembly", desc: "Complete unit: motor, gearhead, brake, sensor, housing, harness. Options selectable.", hasOptions: true,
       tops: () => bom && bom.tops.length ? [bom.tops[0]] : null },
     { id: "housed", name: "Housed Motor Assembly", desc: "Motor assembly built and tested as a deliverable unit.",
-      tops: () => { const m = findByDesc(/motor assembly/i); return m ? [m.pn] : null; } },
+      tops: () => { const m = findByDesc(/motor.{0,28}(assembly|assy)|(assembly|assy).{0,28}motor/i); return m ? [m.pn] : null; } },
     { id: "frameless", name: "Frameless Motor Set (Stator + Rotor)", desc: "Matched stator and rotor shipped as a component set — no housing or bearings.",
       tops: () => { const s = findByDesc(/stator|lamination stack/i), r = findByDesc(/rotor assembly/i); return s && r ? [s.pn, r.pn] : null; } },
     { id: "stator", name: "Stator Only", desc: "Lamination stack and winding through electrical test.",
       tops: () => { const s = findByDesc(/stator|lamination stack/i); return s ? [s.pn] : null; } },
     { id: "rotor", name: "Rotor Only", desc: "Shaft, magnets, sleeve — bonded, ground, balanced.",
-      tops: () => { const r = findByDesc(/rotor assembly/i); return r ? [r.pn] : null; } },
+      tops: () => { const r = findByDesc(/rotor\s+ass(?:embl|y)/i); return r ? [r.pn] : null; } },
   ];
 }
 
@@ -272,7 +272,7 @@ const SAFETY_TEXT = {
 };
 
 const OPS_LIBRARY = [
-  { id: "rotor", match: p => /rotor assembly/i.test(p.desc),
+  { id: "rotor", match: p => /rotor\s+ass(?:embl|y)/i.test(p.desc),
     atp: [["Magnet OD / sleeve OD size", "Per drawing"], ["Runout / concentricity", "Per drawing"], ["Magnet polarity pattern", "Alternating, per map"], ["Surface finish", "Per drawing"]],
     safety: ["magnets", "epoxy", "grind"],
     ops: (p, kids, bom, excluded, ref, refPN) => [
@@ -319,7 +319,7 @@ const OPS_LIBRARY = [
       { op: "130", dept: "QUALITY / STOCK", title: "Preserve, Identify & Stock", text: "Clean, preserve, identify, and package. Protect journals and sleeve OD; package for magnetic handling. Release to next higher assembly or ship.",
         accept: "Preservation, ID, and packaging per released requirements.", record: "Qty accepted, stock location, lot/serial, final QA approval." },
     ] },
-  { id: "statorWinding", match: p => /stator/i.test(p.desc) && /assembl|assy/i.test(p.desc) && !/lamination|stack/i.test(p.desc),
+  { id: "statorWinding", match: p => /stator/i.test(p.desc) && /assembl|assy/i.test(p.desc) && !/lamination|stack|core/i.test(p.desc),
     atp: [["Phase resistance U-V / V-W / W-U", "Per ATP at stated temp"], ["Resistance imbalance", "Per ATP"], ["Insulation resistance", "Per ATP"], ["Surge comparison", "Per ATP"], ["Dielectric withstand", "No breakdown"], ["Line-to-line inductance", "Per ATP"], ["Electrical rotation / phase sequence", "Correct per drawing"]],
     safety: ["epoxy", "electrical"],
     ops: (p, kids, bom, excluded, ref, refPN) => [
@@ -371,7 +371,7 @@ const OPS_LIBRARY = [
         text: "Preserve and protect leads and bore; package with contamination protection; identify with lot/serial; complete stock transaction and release to next higher assembly.",
         accept: "Preservation, identification, and stock transaction per released requirements.", record: "Qty, stock location, lot/serial, NHA reference." },
     ] },
-  { id: "statorStack", match: p => /lamination stack|stator/i.test(p.desc) && !/winding/i.test(p.desc),
+  { id: "statorStack", match: p => /lamination|stator core|stack\s+ass|stator/i.test(p.desc) && !/winding|coil/i.test(p.desc),
     atp: [["Stack height / squareness", "Per drawing"], ["Bore / OD size", "Per drawing"], ["Interlaminar insulation", "Per released test"]],
     safety: ["epoxy"],
     ops: (p, kids, bom, excluded, ref, refPN) => [
@@ -386,7 +386,7 @@ const OPS_LIBRARY = [
       { op: "60", dept: "QA / INSPECT", title: "Final Inspection", hold: true, text: "Final dimensional/visual inspection and interlaminar insulation check per released test.", accept: "All characteristics accepted.", record: "Inspection report, final QA stamp." },
       { op: "70", dept: "STOCK", title: "Preserve & Stock", text: "Clean, preserve, identify, and stock for winding / next higher assembly.", accept: "Preservation and ID per requirements.", record: "Qty, location, lot ID." },
     ] },
-  { id: "motor", match: p => /motor assembly/i.test(p.desc),
+  { id: "motor", match: p => /motor.{0,28}(assembly|assy)|(assembly|assy).{0,28}motor/i.test(p.desc),
     atp: [["Phase resistance U-V / V-W / W-U", "Per ATP at stated temp"], ["Resistance imbalance", "Per ATP"], ["Insulation resistance", "Per ATP"], ["Dielectric withstand", "No breakdown"], ["Back-EMF / Ke", "Per ATP at controlled RPM"], ["No-load current / speed", "Per ATP"], ["Axial endplay / preload", "Per drawing"], ["Direction / commutation", "Correct"]],
     safety: ["magnets", "electrical"],
     ops: (p, kids, bom, excluded, ref, refPN) => {
@@ -448,7 +448,7 @@ const OPS_LIBRARY = [
       { op: "60", dept: "TEST", title: "Functional Test", hold: true, text: "Verify release/dropout at released values; verify holding function per ATP.", accept: "All ATP values met.", record: "Test values, equipment ID." },
       { op: "70", dept: "QA / STOCK", title: "Final Inspect & Stock", text: "Final visual/config inspection; preserve, identify, and stock.", accept: "Final QA acceptance.", record: "Qty, location, QA stamp." },
     ] },
-  { id: "gearhead", match: p => /gearhead/i.test(p.desc),
+  { id: "gearhead", match: p => /gear[\s-]*head/i.test(p.desc),
     atp: [["Backlash / lost motion", "Per drawing"], ["Running torque", "Per ATP"], ["Output runout", "Per drawing"]],
     safety: [],
     ops: (p, kids, bom, excluded, ref, refPN) => [
@@ -616,6 +616,199 @@ function runDocumentCheck(bom, excluded, tops, purchased) {
   return { errors, warns, info, pass: errors.length === 0 };
 }
 
+/* ===== ERP BOM report parsers (JobBoss / ICG-style exports) =====
+   Formats:
+   A. Exploded BOM (level notation "2******") — full tree, level mode
+   B. Standard BOM (sections "Part No:" + Assy rows) — parent mode, multi-section
+   C. Report grids from xls (same reports, plus FRM-61 kitting form) — column-true
+   All output: { mode:'level'|'parent', rows:[{level?,parent?,find,qty,uom,pn,rev,desc,mb,mat,rem}], meta } */
+
+const RPT_UNITS = "EA|QT|OZ|FT|YD|LB|GA|L|IN2|IN|PC|SET|KT|EA\\.";
+const RPT_PN_RE = /^[A-Z0-9][A-Z0-9./#*-]{2,}$/;
+const isPN = t => !!t && RPT_PN_RE.test(t) && /\d/.test(t) && !new RegExp("^(" + RPT_UNITS + ")$").test(t) && !/^\d[\d,.]*$/.test(t) && !/^\$\d/.test(t);
+const SKIP_RE = /^(Page \d+ of|Report Generated|Island Components|Bill of Materials|Exploded Bill|Level\s+Part Number|Stock\s+Quantity|Part\s+Unit$|Type\s+Number|Description Required Net|Quantity$|TOTAL MATERIAL|Part No:|Alt Part No:|Used On:|Description:|Descrip:|Cautions?:|~~~|\d+-\s|For Assy|\$[\d,.]+(\s+\$[\d,.]+)?$|Revision:|Quantity:\s|Enter QTY|Prepared By|Received By|QC Verify)/i;
+const numQty = s => { const n = parseFloat(String(s).replace(/,/g, "")); return isNaN(n) ? "1" : (n === Math.floor(n) ? String(n) : String(n)); };
+
+function detectReportFormat(text) {
+  const t = String(text || "");
+  const levelLines = (t.match(/^\s*\d\*{2,}/gm) || []).length;
+  if (/Exploded Bill of Material/i.test(t) || levelLines >= 3) return "exploded";
+  if (/Bill of Materials/i.test(t) && /Part No:/i.test(t)) return "standard";
+  return null;
+}
+
+/* ---- A. Exploded BOM text (also FRM-61-style level text) ---- */
+function parseExplodedText(text) {
+  const lines = String(text).split(/\r?\n/).map(l => l.trim());
+  const rows = []; const notes = [];
+  let pendingLevel = null, cur = null, curDone = false;
+  const dataTail = new RegExp("^(.*?)\\s{2,}(" + RPT_UNITS + ")\\s+([\\d,]+\\.?\\d*)\\s+\\$");
+  const dataTailLoose = new RegExp("^(.*?)\\s+(" + RPT_UNITS + ")\\s+([\\d,]+\\.?\\d*)\\s+\\$");
+  const unitFirst = new RegExp("^(" + RPT_UNITS + ")\\s+([\\d,]+\\.?\\d*)\\s+\\$"); // chat-copy variant: data on its own line
+  const flush = () => { if (cur) { cur.desc = cur.desc.replace(/\s+/g, " ").trim(); rows.push(cur); } cur = null; curDone = false; };
+  for (const raw of lines) {
+    if (!raw) continue;
+    let l = raw;
+    const lvlOnly = l.match(/^(\d)\*{2,}$/);
+    if (lvlOnly) { flush(); pendingLevel = +lvlOnly[1]; continue; }
+    const lvlLead = l.match(/^(\d)\*{2,}\s+(.*)$/);
+    let level = null;
+    if (lvlLead) { flush(); level = +lvlLead[1]; l = lvlLead[2]; }
+    else if (pendingLevel != null && isPN(l.split(/\s+/)[0])) { level = pendingLevel; }
+    if (level != null) {
+      pendingLevel = null;
+      const toks = l.split(/\s+/);
+      const pn = toks[0];
+      if (!isPN(pn)) { continue; }
+      let rest = l.slice(pn.length).trim();
+      cur = { level, parent: null, find: "", qty: "1", uom: "EA", pn, rev: "-", desc: "", mb: "", mat: "", rem: "" };
+      const m = rest.match(dataTail) || rest.match(dataTailLoose);
+      if (m) { cur.desc = m[1]; cur.uom = m[2]; cur.qty = numQty(m[3]); curDone = true; }
+      else cur.desc = rest;
+      continue;
+    }
+    if (SKIP_RE.test(l)) { flush(); continue; }
+    if (cur) {
+      if (!curDone) {
+        const m2 = l.match(unitFirst) || l.match(dataTailLoose);
+        if (m2 && m2.length === 4) { cur.desc += " " + m2[1]; cur.uom = m2[2]; cur.qty = numQty(m2[3]); curDone = true; continue; }
+        if (m2) { cur.uom = m2[1]; cur.qty = numQty(m2[2]); curDone = true; continue; }
+      }
+      // PN wrap rejoin: a leading 1-2 char token on the first continuation line completes the part number
+      if (curDone && !cur._pnFixed) {
+        const pw = l.match(/^([A-Z0-9]{1,2})(?:$|\s{2,}(.*))/);
+        if (pw) { cur.pn += pw[1]; cur._pnFixed = true; if (pw[2]) cur.desc += " " + pw[2]; continue; }
+        cur._pnFixed = true; // only the first continuation line is eligible
+      }
+      if (!/^\$|^[\d,\s.$-]+$/.test(l)) cur.desc += " " + l;  // continuation (skip pure-number columns)
+    }
+  }
+  flush();
+  rows.forEach(r => delete r._pnFixed);
+  return { mode: "level", rows, meta: { format: "exploded", notes } };
+}
+
+/* ---- B. Standard BOM text (sectioned) ---- */
+function parseStandardText(text) {
+  const lines = String(text).split(/\r?\n/).map(l => l.trim());
+  const rows = []; const sections = []; const notes = [];
+  let parent = null, parentRev = "-", expectPN = false, cur = null;
+  const rowRe = new RegExp("^(?:Assy\\s+)?(\\S+)\\s+(.*?)\\s+([\\d,]+\\.?\\d*)\\s+(" + RPT_UNITS + ")\\b");
+  const vendorish = t => /^[A-Z]{2,}$/.test(t) && !/\d/.test(t) && !/^(ASSY|ASSEMBLY|MODEL|UNIT|KIT|SET|WHA|NBP|EDU|LG|THK|HD|OD|ID|SS|CRS|RTV|CLEAR|GRAY|GREY|BLACK|WHITE|RED|BLUE|BLU|GRN|GREEN|YEL|BRN|VIO|ORG|WHT|BLK|STRIPE|WIDE|ROUND|LEAD|PARTS|TUBE|SHEET|SPRING|PLATE|RING|WAX|SILICA)$/.test(t);
+  const flush = () => { if (cur) { cur.desc = cur.desc.replace(/\s+/g, " ").trim(); rows.push(cur); } cur = null; };
+  for (const raw of lines) {
+    if (!raw) continue;
+    const l = raw;
+    if (/^Part No:/i.test(l)) { flush(); expectPN = true; continue; }
+    if (expectPN) {
+      const tok = l.split(/\s+/)[0];
+      if (isPN(tok)) { parent = tok; parentRev = "-"; sections.push(parent); expectPN = false; continue; }
+    }
+    const revM = l.match(/Revision:\s*([A-Z0-9-]+(?:\s*\(\d+\))?)/i);
+    if (revM && parent) { parentRev = revM[1].split(/\s/)[0]; const pr = rows.find(r => r.pn === parent); if (pr) pr.rev = parentRev; continue; }
+    if (SKIP_RE.test(l)) { if (/^For Assy|^Cautions?/i.test(l) && cur) cur.rem = (cur.rem + " " + l).trim(); else flush(); continue; }
+    const m = l.match(rowRe);
+    if (m && isPN(m[1]) && parent) {
+      flush();
+      let desc = m[2].trim(); let rem = "";
+      const dt = desc.split(/\s+/);
+      if (dt.length > 1 && vendorish(dt[dt.length - 1])) { rem = "Vendor: " + dt.pop(); desc = dt.join(" "); }
+      cur = { parent, find: "", qty: numQty(m[3]), uom: m[4], pn: m[1], rev: "-", desc, mb: /^Assy\s/.test(l) ? "" : "Buy", mat: "", rem };
+      continue;
+    }
+    if (cur && !/^\$|^[\d,\s.$-]+$/.test(l) && !/^(Assy)$/.test(l)) cur.desc += " " + l;
+  }
+  flush();
+  // parent parts that never appear as children: synthesize top rows
+  const childPNs = new Set(rows.map(r => r.pn));
+  const secRows = [];
+  sections.forEach(s => { if (!childPNs.has(s)) secRows.push({ parent: "", find: "", qty: "1", uom: "EA", pn: s, rev: "-", desc: "", mb: "Make", mat: "", rem: "" }); });
+  return { mode: "parent", rows: [...secRows, ...rows], meta: { format: "standard", sections, notes } };
+}
+
+/* ---- C. Report grids (xls) — column-true parsing ---- */
+function parseReportGrid(grid) {
+  const compact = row => (row || []).map(c => String(c == null ? "" : c).trim());
+  const nonEmpty = row => compact(row).filter(Boolean);
+  const flat = grid.map(nonEmpty);
+  const all = flat.flat().join(" ");
+  const isLevelCell = c => /^\d\*{2,}$/.test(c) || /^\d\*{2,}\s/.test(c);
+  const hasLevels = flat.some(r => r[0] && isLevelCell(r[0]));
+  const isStandard = /Bill of Materials/i.test(all) && /Part No:/i.test(all);
+  if (!hasLevels && !isStandard) return null;
+  const rows = []; const notes = []; const sections = [];
+  const unitRe = new RegExp("^(" + RPT_UNITS + ")$");
+  if (hasLevels) {
+    for (const r of flat) {
+      if (!r.length) continue;
+      const lv = r[0].match(/^(\d)\*{2,}/);
+      if (r[0] === "NA") { notes.push("Tooling (not BOM): " + (r[1] || "") + " " + (r.slice(2).find(c => /[a-z]/i.test(c) && !unitRe.test(c)) || "")); continue; }
+      if (!lv) continue;
+      const cells = r[0].includes(" ") ? [r[0].replace(/^\d\*+\s*/, ""), ...r.slice(1)] : r.slice(1);
+      if (!cells.length || !isPN(cells[0])) continue;
+      const pn = cells[0];
+      let rev = "-", di = 1;
+      if (cells[1] && /^([A-Z]|-|[A-Z]\d?)$/.test(cells[1]) && cells[1].length <= 2) { rev = cells[1]; di = 2; }
+      let desc = "", qty = "1", uom = "EA";
+      for (let i = di; i < cells.length; i++) {
+        const c = cells[i];
+        if (unitRe.test(c)) { uom = c; break; }
+        if (/^[\d,]+\.?\d*$/.test(c) && desc) { qty = numQty(c); continue; }
+        if (/[A-Za-z]/.test(c) && !/^YES$|^NO$/.test(c)) desc = desc ? desc + " " + c : c;
+      }
+      rows.push({ level: +lv[1], parent: null, find: "", qty, uom, pn, rev, desc, mb: "", mat: "", rem: "" });
+    }
+    return { mode: "level", rows, meta: { format: "kitting-grid", notes } };
+  }
+  // standard grid: track sections; child rows have qty+unit adjacency
+  let parent = null;
+  for (let ri = 0; ri < grid.length; ri++) {
+    const rc = compact(grid[ri]);
+    const ne = rc.filter(Boolean);
+    if (!ne.length) continue;
+    const pi = rc.findIndex(c => /^Part No:$/i.test(c));
+    if (pi >= 0) { const v = rc.slice(pi + 1).find(c => isPN(c)); if (v) { parent = v; sections.push(parent); } continue; }
+    const rvi = rc.findIndex(c => /^Revision:$/i.test(c));
+    if (rvi >= 0 && parent) { const v = rc.slice(rvi + 1).find(Boolean); if (v) { const pr = rows.find(x => x.pn === parent); if (pr) pr.rev = v.split(/\s/)[0]; } }
+    if (!parent) continue;
+    const GRID_SKIP = /^(Page \d+ of|Report Generated|Island Components|Bill of Materials|TOTAL MATERIAL|Type$|Number$|Description$|Vendor$|Quantity$|Unit$|Weight$|Cost$|Amount$)/i;
+    if (ne.some(c => GRID_SKIP.test(c))) continue;
+    if (ne.some(c => /^For Assy/i.test(c))) continue;
+    // find qty+unit pair
+    let qi = -1;
+    for (let i = 0; i < ne.length - 1; i++) if (/^[\d,]+\.?\d*$/.test(ne[i]) && unitRe.test(ne[i + 1])) { qi = i; break; }
+    if (qi < 0) continue;
+    const isAssy = ne[0] === "Assy";
+    const body = ne.slice(isAssy ? 1 : 0, qi);
+    if (!body.length || !isPN(body[0])) continue;
+    const pn = body[0];
+    let rev = "-", bi = 1;
+    if (body[1] && body[1].length <= 8 && /^[A-Z](\s*\(\d+\))?$|^-$/.test(body[1])) { rev = body[1].split(/\s/)[0]; bi = 2; }
+    let desc = "", rem = "";
+    for (let i = bi; i < body.length; i++) {
+      const c = body[i];
+      if (/^[A-Z]{2,}$/.test(c) && !/\d/.test(c) && desc && c.length <= 12 && i === body.length - 1 && !/^(ASSY|ASSEMBLY|MODEL|UNIT|KIT|SET|WHA|NBP|EDU|LG|THK|HD|OD|ID|SS|CRS|RTV|CLEAR|GRAY|GREY|BLACK|WHITE|RED|BLUE|BLU|GRN|GREEN|YEL|BRN|VIO|ORG|WHT|BLK|STRIPE|WIDE|ROUND|LEAD|PARTS|TUBE|SHEET|SPRING|PLATE|RING|WAX|SILICA)$/.test(c)) { rem = "Vendor: " + c; continue; }
+      desc = desc ? desc + " " + c : c;
+    }
+    rows.push({ parent, find: "", qty: numQty(ne[qi]), uom: ne[qi + 1], pn, rev, desc, mb: isAssy ? "" : "Buy", mat: "", rem });
+  }
+  const childPNs = new Set(rows.map(r => r.pn));
+  const secRows = [];
+  sections.forEach(s => { if (!childPNs.has(s)) secRows.push({ parent: "", find: "", qty: "1", uom: "EA", pn: s, rev: "-", desc: "", mb: "Make", mat: "", rem: "" }); });
+  return { mode: "parent", rows: [...secRows, ...rows], meta: { format: "standard-grid", sections, notes } };
+}
+
+function reportToGrid(parsed) {
+  const hdrKey = parsed.mode === "level" ? "Level" : "Parent";
+  let lvl0 = 0;
+  if (parsed.mode === "level" && parsed.rows.length) lvl0 = Math.min(...parsed.rows.map(r => +r.level || 0));
+  const headers = [hdrKey, "Find", "Qty", "UOM", "PartNumber", "Rev", "Description", "MakeBuy", "Material", "Remarks"];
+  const rows = parsed.rows.map(r => [
+    parsed.mode === "level" ? String((+r.level || 0) - lvl0) : (r.parent || ""),
+    r.find || "", r.qty || "1", r.uom || "EA", r.pn, r.rev || "-", r.desc || "", r.mb || "", r.mat || "", r.rem || ""]);
+  return [headers, ...rows];
+}
+
 /* =====================================================================
    DRAWING MODULE — deterministic extraction from drawing text
    (vector-PDF text or OCR output). Finds title-block PN + parts-list rows.
@@ -765,6 +958,90 @@ const C = {
   ltblue: "#D9E2F1", gray: "#F2F2F2",
 };
 const MONO = '"Consolas","JetBrains Mono",ui-monospace,monospace';
+
+/* =====================================================================
+   OUTPUT PROFILES — EZ (default) and Island Components Group.
+   Profile controls branding, doc-number scheme, column labels, op-verb
+   vocabulary, and which document set is emitted. Generation logic is
+   shared; profiles are presentation + naming only.
+   ===================================================================== */
+const PROFILES = {
+  ez: {
+    id: "ez", label: "EZ Motors (default)",
+    company: "EZ MOTORS, INC.", companyShort: "EZ MOTORS",
+    address: "AEROSPACE ELECTROMECHANICAL SYSTEMS", cage: "CAGE CODE: 0Z9K8",
+    docNo: { F: t => "F-" + t, P: t => "P-" + t, TRV: pn => "TRV-" + pn, WI: pn => "WI-" + pn },
+    wiKind: "WORK INSTRUCTION", wiRef: pn => "WI-" + pn,
+    qaField: false, espMode: false,
+    travelerCols: ["Op", "Dept", "Operation / Detailed Work Instruction", "Acceptance / Data to Record", "Qty Pass", "Qty Rej", "Operator / Date", "QA / Date"],
+    mapVerb: null,
+  },
+  island: {
+    id: "island", label: "Island Components Group",
+    company: "ISLAND COMPONENTS GROUP, INC.", companyShort: "ISLAND COMPONENTS",
+    address: "210 Marcus Blvd. · Hauppauge, N.Y. 11788", cage: "Tel (631) 563-4224 · Fax (631) 563-4363",
+    // Island uses ESP procedure numbers as the WI identity; travelers are Job Travelers.
+    docNo: { F: t => t + " FAMILY TREE", P: t => "PARTS LIST " + t, TRV: pn => "Job Traveler " + pn, WI: (pn, esp) => (esp || "ESP-*") },
+    wiKind: "PROCESS PROCEDURE", wiRef: (pn, esp) => (esp || "ESP-*"),
+    qaField: true, espMode: true,
+    travelerCols: ["Step No", "Dept", "Work Cntr", "Operation Description", "Qty Accepted", "Qty Reject", "Complete By / Date", "Comments"],
+    // map generic op titles -> Island work-center action verbs (departments preserved separately)
+    mapVerb: title => {
+      const T = title.toLowerCase();
+      if (/kit/.test(T)) return "KIT";
+      if (/inspect|inspection|verify|final qa/.test(T)) return "INSPECT";
+      if (/wind/.test(T)) return "WIND";
+      if (/insert coil|insert/.test(T)) return "INSERT";
+      if (/rotation|test|hi-?pot|resistance|electrical|impregnation test/.test(T)) return "TEST";
+      if (/connect|lead|solder|terminat/.test(T)) return "CONNECT";
+      if (/tape|teflon/.test(T)) return "TAPE";
+      if (/lace|lacing/.test(T)) return "INSERT";
+      if (/form/.test(T)) return "FORM";
+      if (/varnish|impregnat/.test(T)) return "IMPREG";
+      if (/clean|visual/.test(T)) return "CLEAN";
+      if (/mark/.test(T)) return "MARK";
+      if (/bond|stack|assemble|install/.test(T)) return "ASSEMBLE";
+      if (/grind|machine/.test(T)) return "MACHINE";
+      if (/stock|preserve|package|ship/.test(T)) return "MOVE";
+      if (/cure/.test(T)) return "CURE";
+      return "MFG";
+    },
+  },
+};
+function activeProfile(id) { return PROFILES[id] || PROFILES.ez; }
+// Island departments derived from our dept text (keep real departments per user)
+function islandDept(dept) {
+  const d = (dept || "").toUpperCase();
+  if (/QA|QUALITY/.test(d)) return "QA";
+  if (/INSPECT|INSP/.test(d)) return "INSP";
+  if (/TEST/.test(d)) return "TEST";
+  if (/STORES|STOCK|KIT/.test(d)) return "MFG";
+  if (/MACHINE|GRIND|PROC|WIND|ASSEMBLY|MFG/.test(d)) return "MFG";
+  return "MFG";
+}
+/* customer auto-detect from BOM descriptions/remarks (e.g. "Mitutoyo") */
+const KNOWN_CUSTOMERS = ["Mitutoyo", "Renishaw", "Alpine", "Genesis", "Brewster", "Tower", "Wiremasters", "Century Spring"];
+function detectCustomer(bom) {
+  const hay = Object.values(bom.parts).map(p => (p.desc || "") + " " + (p.rem || "")).join(" ");
+  for (const c of KNOWN_CUSTOMERS) if (new RegExp(c, "i").test(hay)) return { value: c, guessed: true };
+  const m = hay.match(/\bCUST(?:OMER)?[:\s]+([A-Z][A-Za-z]{3,})/);
+  if (m) return { value: m[1], guessed: true };
+  return { value: "", guessed: false };
+}
+/* ESP number resolution: per-assembly override map -> default ESP-* */
+function espFor(pn, espByPn) { return (espByPn && espByPn[pn]) ? espByPn[pn] : "ESP-*"; }
+/* yellow highlight wrapper for auto-populated / uncertain fields (Island) */
+const HL = { background: "#FFF200", padding: "0 3px", fontWeight: 700 };
+function Y({ children, on }) { return on ? <span style={HL}>{children}</span> : <>{children}</>; }
+/* pull fixture / tool callouts and material PNs referenced in an op set (for ESP auto-populate) */
+function extractToolsAndDocs(ops) {
+  const tools = new Set(), docs = new Set(), specs = new Set();
+  const all = ops.map(o => [o.title, o.text, (o.sub || []).join(" "), o.record, o.accept].join(" ")).join(" ");
+  (all.match(/\b(?:FF|TL|FIX)-\d{2,4}[A-Z0-9-]*/g) || []).forEach(t => tools.add(t));
+  (all.match(/\bESP-\d{2,4}[A-Z0-9-]*/g) || []).forEach(d => docs.add(d));
+  (all.match(/\bdrawing\s+([A-Z]{1,4}-?\d{2,5}[A-Z0-9-]*)/gi) || []).forEach(d => docs.add(d.replace(/drawing\s+/i, "")));
+  return { tools: [...tools], docs: [...docs], specs: [...specs] };
+}
 
 function DocHeader({ title, docNo, pn, extra, m }) {
   const cell = { padding: "5px 8px", borderRight: `1px solid ${C.navy}`, fontSize: 11 };
@@ -927,7 +1204,7 @@ function wrapText(s, maxChars) {
   return lines.slice(0, 3);
 }
 
-function SheetDrawing({ bom, sheet, purchased, fit }) {
+function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
   const L = sheet.layout;
   const PADX = 20, PADY = 16, CALLOUT_H = 46;
   const callouts = L.flat.filter(n => !n.isStacked && n.inline && n.inline.length && n.inline.every(k => !k.kids.length && !k.collapsed) && !(n.stacked && n.stacked.length) && n.depth >= 1);
@@ -948,6 +1225,7 @@ function SheetDrawing({ bom, sheet, purchased, fit }) {
     wrapText(n.part.desc, 19).forEach((l, li) => els.push(
       <text key={"d" + key + li} x={nx + NW / 2} y={ny + 26 + li * 9} textAnchor="middle" fontSize={7.2} fill="#333">{l}</text>));
     els.push(<text key={"q" + key} x={nx + NW / 2} y={ny + NH - 6} textAnchor="middle" fontSize={8} fontWeight={600} fill="#222">{"QTY: " + (n.row ? n.row.qty : "1")}</text>);
+    if (qaField) { els.push(<text key={"qa" + key} x={nx + 4} y={ny + NH + 9} fontSize={6.5} fill="#0B6FB8" fontWeight={700}>Q.A. ______</text>); }
     if (n.collapsed && sheet.refs[n.pn]) els.push(<text key={"r" + key} x={nx + NW / 2} y={ny + NH + 11} textAnchor="middle" fontSize={7.5} fontWeight={700} fill={C.navy2}>{"(SEE SHEET " + sheet.refs[n.pn] + ")"}</text>);
     if (missing) els.push(<text key={"m" + key} x={nx + NW / 2} y={ny + NH + 11} textAnchor="middle" fontSize={7.5} fontWeight={700} fill="#B8860B">▲ NO BOM — VERIFY</text>);
     if (isPurch) els.push(<text key={"u" + key} x={nx + NW / 2} y={ny + NH + 11} textAnchor="middle" fontSize={7.5} fontWeight={700} fill="#666">(PURCHASED)</text>);
@@ -984,7 +1262,8 @@ function SheetDrawing({ bom, sheet, purchased, fit }) {
   return { svg, W };
 }
 
-function TreeDoc({ bom, excluded, tops, cfgName, m, purchased }) {
+function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer }) {
+  const P = activeProfile(profile);
   const [fit, setFit] = useState(true);
   // sheet plan across all tops
   let allSheets = [];
@@ -1006,10 +1285,10 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased }) {
       <div style={{ border: `1.5px solid #111`, marginBottom: 12 }}>
         <div style={{ display: "grid", gridTemplateColumns: "200px 1fr 250px" }}>
           <div style={{ padding: "8px 10px", borderRight: "1px solid #111" }}>
-            <div style={{ fontWeight: 900, fontSize: 20, color: C.navy, fontStyle: "italic", letterSpacing: "-.02em" }}>EZ<span style={{ fontSize: 13, fontStyle: "normal", letterSpacing: ".08em" }}>MOTORS</span></div>
-            <div style={{ fontSize: 8.5, marginTop: 2 }}>EZ MOTORS, INC.</div>
-            <div style={{ fontSize: 7.5, color: "#555" }}>AEROSPACE ELECTROMECHANICAL SYSTEMS</div>
-            <div style={{ fontSize: 7.5, color: "#555" }}>CAGE CODE: 0Z9K8</div>
+            <div style={{ fontWeight: 900, fontSize: P.id === "island" ? 17 : 20, color: P.id === "island" ? "#0B6FB8" : C.navy, fontStyle: P.id === "island" ? "normal" : "italic", letterSpacing: "-.02em" }}>{P.id === "island" ? <>ISLAND<span style={{ fontSize: 10, color: "#1A1A1E" }}> COMPONENTS</span></> : <>EZ<span style={{ fontSize: 13, fontStyle: "normal", letterSpacing: ".08em" }}>MOTORS</span></>}</div>
+            <div style={{ fontSize: 8.5, marginTop: 2 }}>{P.company}</div>
+            <div style={{ fontSize: 7.5, color: "#555" }}>{P.address}</div>
+            <div style={{ fontSize: 7.5, color: "#555" }}>{P.cage}</div>
           </div>
           <div style={{ padding: "8px 10px", textAlign: "center", borderRight: "1px solid #111" }}>
             <div style={{ fontWeight: 800, fontSize: 16 }}>{(bom.parts[tops[0]] && bom.parts[tops[0]].desc ? bom.parts[tops[0]].desc : tops[0]).toUpperCase()}</div>
@@ -1017,7 +1296,7 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased }) {
             <div style={{ fontSize: 10, marginTop: 3 }}>TOP LEVEL ASSEMBL{tops.length > 1 ? "IES" : "Y"}: <b style={{ fontFamily: MONO }}>{tops.join(" + ")}</b> — {cfgName}</div>
           </div>
           <div style={{ fontSize: 8.5 }}>
-            {[["DOCUMENT NO.", "F-" + tops.join("+"), "REV."], ["DATE", m.date, m.rev || "1"], ["DRAWN BY:", "Engineering", nSheets + " SHEET" + (nSheets > 1 ? "S" : "")], ["CHECKED BY:", "Quality", ""], ["APPROVED BY:", "", ""]].map((r, i) => (
+            {[["DOCUMENT NO.", P.docNo.F(tops.join("+")), "REV."], ["DATE", m.date, m.rev || "1"], ["DRAWN BY:", "Engineering", nSheets + " SHEET" + (nSheets > 1 ? "S" : "")], ["CHECKED BY:", "Quality", ""], ["APPROVED BY:", "", ""]].map((r, i) => (
               <div key={i} style={{ display: "grid", gridTemplateColumns: "82px 1fr 60px" }}>
                 <div style={{ ...tbC, fontWeight: 700 }}>{r[0]}</div>
                 <div style={{ ...tbC, fontFamily: MONO }}>{r[1]}</div>
@@ -1035,7 +1314,7 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased }) {
         </button>
       </div>
       {allSheets.map(sh => {
-        const d = SheetDrawing({ bom, sheet: sh, purchased, fit });
+        const d = SheetDrawing({ bom, sheet: sh, purchased, fit, qaField: P.qaField });
         const shTop = bom.parts[sh.top] || {};
         return (
           <div key={sh.sheetNo} style={{ border: "1px solid #111", marginBottom: 10, background: "#fff" }}>
@@ -1355,7 +1634,8 @@ function vignetteSvg(title) {
 
 
 /* ---- Parts List document (P-<top PN>) ---- */
-function PartsListDoc({ bom, excluded, tops, cfgName, m, purchased }) {
+function PartsListDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer }) {
+  const P = activeProfile(profile);
   const topPart = bom.parts[tops[0]] || {};
   const flat = tops.flatMap(t => scopedTree(bom, excluded, t));
   const missing = flat.filter(r => !r.isAsm && isAssemblyLike(r.part) && !purchased[r.part.pn]);
@@ -1367,10 +1647,10 @@ function PartsListDoc({ bom, excluded, tops, cfgName, m, purchased }) {
       <div style={{ border: `1.5px solid #111`, marginBottom: 12 }}>
         <div style={{ display: "grid", gridTemplateColumns: "200px 1fr 250px" }}>
           <div style={{ padding: "8px 10px", borderRight: "1px solid #111" }}>
-            <div style={{ fontWeight: 900, fontSize: 20, color: C.navy, fontStyle: "italic", letterSpacing: "-.02em" }}>EZ<span style={{ fontSize: 13, fontStyle: "normal", letterSpacing: ".08em" }}>MOTORS</span></div>
-            <div style={{ fontSize: 8.5, marginTop: 2 }}>EZ MOTORS, INC.</div>
-            <div style={{ fontSize: 7.5, color: "#555" }}>AEROSPACE ELECTROMECHANICAL SYSTEMS</div>
-            <div style={{ fontSize: 7.5, color: "#555" }}>CAGE CODE: 0Z9K8</div>
+            <div style={{ fontWeight: 900, fontSize: P.id === "island" ? 17 : 20, color: P.id === "island" ? "#0B6FB8" : C.navy, fontStyle: P.id === "island" ? "normal" : "italic", letterSpacing: "-.02em" }}>{P.id === "island" ? <>ISLAND<span style={{ fontSize: 10, color: "#1A1A1E" }}> COMPONENTS</span></> : <>EZ<span style={{ fontSize: 13, fontStyle: "normal", letterSpacing: ".08em" }}>MOTORS</span></>}</div>
+            <div style={{ fontSize: 8.5, marginTop: 2 }}>{P.company}</div>
+            <div style={{ fontSize: 7.5, color: "#555" }}>{P.address}</div>
+            <div style={{ fontSize: 7.5, color: "#555" }}>{P.cage}</div>
           </div>
           <div style={{ padding: "8px 10px", textAlign: "center", borderRight: "1px solid #111" }}>
             <div style={{ fontWeight: 800, fontSize: 16 }}>{(topPart.desc || tops[0]).toUpperCase()}</div>
@@ -1378,7 +1658,7 @@ function PartsListDoc({ bom, excluded, tops, cfgName, m, purchased }) {
             <div style={{ fontSize: 10, marginTop: 3 }}>TOP LEVEL ASSEMBL{tops.length > 1 ? "IES" : "Y"}: <b style={{ fontFamily: MONO }}>{tops.join(" + ")}</b> — {cfgName} · SEE FAMILY TREE F-{tops.join("+")}</div>
           </div>
           <div style={{ fontSize: 8.5 }}>
-            {[["DOCUMENT NO.", "P-" + tops.join("+"), "REV."], ["DATE", m.date, m.rev || "1"], ["DRAWN BY:", "Engineering", "1 OF 1"], ["CHECKED BY:", "Quality", ""], ["APPROVED BY:", "", ""]].map((r, i) => (
+            {[["DOCUMENT NO.", P.docNo.P(tops.join("+")), "REV."], ["DATE", m.date, m.rev || "1"], ["DRAWN BY:", "Engineering", "1 OF 1"], ["CHECKED BY:", "Quality", ""], ["APPROVED BY:", "", ""]].map((r, i) => (
               <div key={i} style={{ display: "grid", gridTemplateColumns: "82px 1fr 60px" }}>
                 <div style={{ ...tbC, fontWeight: 700 }}>{r[0]}</div>
                 <div style={{ ...tbC, fontFamily: MONO }}>{r[1]}</div>
@@ -1423,7 +1703,41 @@ function PartsListDoc({ bom, excluded, tops, cfgName, m, purchased }) {
 }
 
 /* ---- Traveler docs ---- */
-function TravelerDocs({ bom, excluded, tops, m }) {
+function IslandBrandBlock({ sub }) {
+  return (
+    <div style={{ textAlign: "center", marginBottom: 6 }}>
+      <div style={{ fontWeight: 800, fontSize: 17, color: "#0B6FB8", letterSpacing: ".02em" }}>ISLAND<span style={{ color: "#1A1A1E", fontWeight: 400 }}> COMPONENTS</span></div>
+      <div style={{ fontSize: 8, color: "#555" }}>ISLAND COMPONENTS GROUP, INC. · 210 Marcus Blvd. Hauppauge, N.Y. 11788</div>
+      {sub && <div style={{ fontSize: 8, color: "#777" }}>{sub}</div>}
+    </div>
+  );
+}
+function IslandTravelerHeader({ p, pn, m, esp, customer }) {
+  const cell = { padding: "4px 8px", border: "1px solid #999", fontSize: 10.5 };
+  const kc = { ...cell, background: C.gray, fontWeight: 700, fontSize: 9, textTransform: "uppercase" };
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", borderBottom: "2px solid #0B6FB8", paddingBottom: 4, marginBottom: 6 }}>
+        <div><div style={{ fontWeight: 800, fontSize: 15 }}>Job Traveler <span style={{ fontSize: 10, fontWeight: 400, color: "#666" }}>— Shop Copy</span></div>
+          <div style={{ fontSize: 8.5, color: "#555" }}>Island Components Group Inc.</div></div>
+        <div style={{ fontWeight: 800, fontFamily: MONO, fontSize: 14 }}>{pn}</div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto 1fr auto 1fr", gap: 0 }}>
+        <div style={kc}>Part No.</div><div style={{ ...cell, fontFamily: MONO }}>{pn}</div>
+        <div style={kc}>Description</div><div style={cell}>{p.desc || ""}</div>
+        <div style={kc}>Rev</div><div style={{ ...cell, fontFamily: MONO }}>{p.rev || "-"}</div>
+        <div style={kc}>Job Number</div><div style={cell}><Y on={!m.wo}>{m.wo || "________"}</Y></div>
+        <div style={kc}>Customer</div><div style={cell}><Y on={!customer}>{customer || "________"}</Y></div>
+        <div style={kc}>Procedure</div><div style={{ ...cell }}><Y on={esp === "ESP-*"}>{esp}</Y></div>
+        <div style={kc}>Date</div><div style={cell}>{m.date}</div>
+        <div style={kc}>Qty</div><div style={cell}><Y on>________</Y></div>
+        <div style={kc}>Routed By</div><div style={cell}><Y on>________</Y></div>
+      </div>
+    </div>
+  );
+}
+function TravelerDocs({ bom, excluded, tops, m, profile, espByPn, customer }) {
+  const P = activeProfile(profile);
   const order = buildOrder(bom, excluded, tops);
   const th = { background: C.navy, color: "#fff", padding: "4px 6px", textAlign: "left", fontSize: 9 };
   const td = { border: `1px solid ${C.line}`, padding: "5px 6px", verticalAlign: "top", fontSize: 10 };
@@ -1433,10 +1747,12 @@ function TravelerDocs({ bom, excluded, tops, m }) {
     const { tpl, ops } = opsFor(bom, excluded, pn);
     return (
       <Sheet key={pn}>
-        <DocHeader title={(p.desc || pn).toUpperCase() + " — TRAVELER"} docNo={"TRV-" + pn} pn={pn} m={m} />
+        {P.espMode
+          ? <IslandTravelerHeader p={p} pn={pn} m={m} esp={espFor(pn, espByPn)} customer={customer} />
+          : <DocHeader title={(p.desc || pn).toUpperCase() + " — TRAVELER"} docNo={"TRV-" + pn} pn={pn} m={m} />}
         <H3>GENERAL NOTES</H3>
         <ol style={{ fontSize: 10.5, margin: "0 0 12px 18px" }}>
-          {["Sample traveler. Drawing requirements, torque values, cure schedules, test limits, and process specifications require Engineering and Quality approval before production use.",
+          {[(P.espMode ? `Job Traveler for ${p.desc || pn} (${pn}). Detailed method per ${espFor(pn, espByPn)}. This traveler is the record of accomplishment, quantities, and sign-off.` : "Sample traveler. Drawing requirements, torque values, cure schedules, test limits, and process specifications require Engineering and Quality approval before production use."),
             "Use only current released drawings, BOMs, specifications, approved supplier parts, calibrated tooling, and in-calibration test equipment.",
             "QA hold points are marked ★ with shaded operation numbers. Do not proceed beyond a hold point without required acceptance and sign-off.",
             "Record all nonconformances in the approved quality system. No unrecorded rework, substitution, or deviation.",
@@ -1445,25 +1761,29 @@ function TravelerDocs({ bom, excluded, tops, m }) {
         <H3>ROUTING / OPERATIONS</H3>
         <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 14 }}>
           <thead><tr>
-            <th style={th}>Op</th><th style={th}>Dept</th>
-            <th style={{ ...th, width: "32%" }}>Operation / Detailed Work Instruction</th>
-            <th style={{ ...th, width: "22%" }}>Acceptance / Data to Record</th>
-            <th style={{ ...th, width: 44 }}>Qty Pass</th><th style={{ ...th, width: 44 }}>Qty Rej</th>
-            <th style={th}>Operator / Date</th><th style={th}>QA / Date</th>
+            <th style={th}>{P.travelerCols[0]}</th><th style={th}>{P.travelerCols[1]}</th>
+            {P.espMode && <th style={th}>{P.travelerCols[2]}</th>}
+            <th style={{ ...th, width: P.espMode ? "40%" : "32%" }}>{P.espMode ? P.travelerCols[3] : P.travelerCols[2]}</th>
+            {!P.espMode && <th style={{ ...th, width: "22%" }}>{P.travelerCols[3]}</th>}
+            <th style={{ ...th, width: 46 }}>{P.travelerCols[4]}</th><th style={{ ...th, width: 46 }}>{P.travelerCols[5]}</th>
+            <th style={th}>{P.travelerCols[6]}</th><th style={th}>{P.travelerCols[7]}</th>
           </tr></thead>
           <tbody>
-            {ops.map(o => (
+            {ops.map(o => {
+              const blank = <div style={{ borderBottom: "1px solid #bbb", height: 13 }} />;
+              return (
               <tr key={o.op}>
                 <td style={{ ...td, fontFamily: MONO, fontWeight: 700, textAlign: "center", width: 42, background: o.hold ? C.hold : "transparent", color: o.hold ? C.holdInk : "inherit" }}>{o.op}{o.hold ? " ★" : ""}</td>
-                <td style={{ ...td, width: 66, fontSize: 9, textTransform: "uppercase" }}>{o.dept}</td>
-                <td style={td}>{o.text}</td>
-                <td style={td}>{o.accept}</td>
-                <td style={{ ...td, width: 44, verticalAlign: "bottom" }}><div style={{ borderBottom: "1px solid #bbb", height: 13 }} /></td>
-                <td style={{ ...td, width: 44, verticalAlign: "bottom" }}><div style={{ borderBottom: "1px solid #bbb", height: 13 }} /></td>
+                <td style={{ ...td, width: 60, fontSize: 9, textTransform: "uppercase" }}>{P.espMode ? islandDept(o.dept) : o.dept}</td>
+                {P.espMode && <td style={{ ...td, width: 72, fontSize: 9, fontWeight: 700, textTransform: "uppercase" }}>{P.mapVerb(o.title)}</td>}
+                <td style={td}>{P.espMode ? <><b>{o.title}.</b> {o.text}</> : o.text}</td>
+                {!P.espMode && <td style={td}>{o.accept}</td>}
+                <td style={{ ...td, width: 46, verticalAlign: "bottom" }}>{blank}</td>
+                <td style={{ ...td, width: 46, verticalAlign: "bottom" }}>{blank}</td>
                 <td style={{ ...td, width: 70 }}>{sig}</td>
-                <td style={{ ...td, width: 70 }}>{sig}</td>
+                <td style={{ ...td, width: 70 }}>{P.espMode ? blank : sig}</td>
               </tr>
-            ))}
+            );})}
           </tbody>
         </table>
         {tpl.atp && (<>
@@ -1507,10 +1827,94 @@ function FragmentPair({ k, v }) {
 }
 
 /* ---- Work instruction docs ---- */
-function WIDocs({ bom, excluded, tops, m }) {
+/* ---- Island ESP process procedure (auto-populated, uncertain fields highlighted) ---- */
+function ESPDoc({ bom, excluded, pn, m, esp, customer }) {
+  const p = bom.parts[pn];
+  const { tpl, ops } = opsFor(bom, excluded, pn);
+  const kids = (bom.children[pn] || []).filter(k => !excluded[k.pn]);
+  const td = { border: `1px solid ${C.line}`, padding: "4px 8px", fontSize: 10 };
+  const th = { background: C.navy, color: "#fff", padding: "4px 6px", textAlign: "left", fontSize: 9 };
+  const { tools, docs } = extractToolsAndDocs(ops);
+  const drawings = [pn, ...docs.filter(d => !/^ESP/i.test(d))];
+  const esps = [...new Set([esp, ...docs.filter(d => /^ESP/i.test(d))])].filter(x => x && x !== "ESP-*");
+  const H = ({ n, children }) => <div style={{ fontWeight: 800, fontSize: 12, color: C.navy, margin: "14px 0 6px", borderBottom: `1px solid ${C.line}`, paddingBottom: 2 }}>{n}&nbsp;&nbsp;{children}</div>;
+  return (
+    <Sheet>
+      <IslandBrandBlock />
+      {/* cover fields — the three highlighted pull-ins */}
+      <div style={{ border: "1px solid #999", padding: "10px 14px", margin: "6px auto 14px", maxWidth: 560, textAlign: "center" }}>
+        <div style={{ fontSize: 12, margin: "4px 0" }}><b>Part Number:</b> <span style={{ fontFamily: MONO }}>{pn}</span></div>
+        <div style={{ fontSize: 12, margin: "4px 0" }}><b>Customer:</b> <Y on={!customer}>{customer || "________________"}</Y></div>
+        <div style={{ fontSize: 15, fontWeight: 800, margin: "8px 0 2px" }}><Y on={esp === "ESP-*"}>{esp}</Y> <span style={{ fontSize: 11, fontWeight: 400 }}>(Procedure Number)</span></div>
+        <div style={{ fontSize: 11, marginTop: 4 }}>{(p.desc || "").toUpperCase()}</div>
+      </div>
+      <div style={{ fontSize: 7.5, color: "#777", textAlign: "center", marginBottom: 10, padding: "0 20px" }}>
+        This document contains proprietary information belonging to Island Components Group Inc. and is solely for use by authorized personnel.
+      </div>
+      <table style={{ width: "auto", borderCollapse: "collapse", margin: "0 0 12px" }}><thead><tr>{["Revision", "Date", "ECO #"].map(h => <th key={h} style={{ ...th, padding: "3px 18px" }}>{h}</th>)}</tr></thead>
+        <tbody><tr><td style={{ ...td, fontFamily: MONO }}>{m.rev || "-"}</td><td style={{ ...td, fontFamily: MONO }}>{m.date}</td><td style={{ ...td, fontFamily: MONO }}>{m.eco || ""}</td></tr></tbody></table>
+
+      <H n="1">SCOPE</H>
+      <p style={{ fontSize: 11 }}>This procedure provides step-by-step instructions for the fabrication and inspection of <b>{p.desc}</b> (P/N {pn}){customer ? <> for <Y on={custDetGuessFlag(customer, bom)}>{customer}</Y></> : ""}. Operations correspond one-for-one with Job Traveler {pn}.</p>
+
+      <H n="2">APPLICABLE DOCUMENTS</H>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr><th style={th}>Document</th><th style={th}>Title / Purpose</th></tr></thead><tbody>
+        {drawings.map(d => <tr key={d}><td style={{ ...td, fontFamily: MONO }}>{d}</td><td style={td}>{d === pn ? "Assembly drawing" : "Referenced drawing"} <Y on>— verify current revision</Y></td></tr>)}
+        {esps.length ? esps.map(d => <tr key={d}><td style={{ ...td, fontFamily: MONO }}>{d}</td><td style={td}>Referenced procedure</td></tr>)
+          : <tr><td style={{ ...td, fontFamily: MONO }}><Y on>ESP-*</Y></td><td style={td}><Y on>Related process/test procedure — enter number</Y></td></tr>}
+      </tbody></table>
+
+      <H n="3">TOOLS &amp; EQUIPMENT</H>
+      {tools.length
+        ? <table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr><th style={th}>Tool / Fixture ID</th><th style={th}>Use</th></tr></thead>
+            <tbody>{tools.map(t => <tr key={t}><td style={{ ...td, fontFamily: MONO }}>{t}</td><td style={td}><Y on>Referenced in routing — confirm description</Y></td></tr>)}
+              <tr><td style={{ ...td }}><Y on>________</Y></td><td style={td}><Y on>Calibrated test equipment as required</Y></td></tr></tbody></table>
+        : <p style={{ fontSize: 10.5 }}><Y on>No fixtures were referenced in the routing text — list required tooling, fixtures, and calibrated equipment.</Y></p>}
+
+      <H n="4">MATERIAL</H>
+      <table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Find", "Qty", "Part Number", "Rev", "Description"].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+        <tbody>{kids.map(k => <tr key={k.pn}><td style={{ ...td, textAlign: "center", fontFamily: MONO }}>{k.find}</td><td style={{ ...td, textAlign: "center" }}>{k.qty} {k.uom}</td><td style={{ ...td, fontFamily: MONO }}>{k.pn}</td><td style={{ ...td, textAlign: "center" }}>{k.rev}</td><td style={td}>{k.desc}</td></tr>)}</tbody></table>
+
+      <H n="5">TRAINING REQUIREMENTS</H>
+      <p style={{ fontSize: 10.5 }}><Y on>Operators shall be trained and qualified for the operations in this procedure (winding, soldering, impregnation, and inspection as applicable). Enter specific training/certification requirements.</Y></p>
+
+      <H n="6">PROCEDURE</H>
+      <p style={{ fontSize: 9.5, color: "#666", fontStyle: "italic", marginBottom: 6 }}>Steps correspond to Job Traveler {pn}. ★ = QA hold point. Record quantities and sign-offs on the traveler.</p>
+      {ops.map(o => {
+        const vig = vignetteSvg(o.title);
+        return (
+          <div key={o.op} style={{ marginBottom: 12, breakInside: "avoid" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "64px 88px 1fr", background: o.hold ? C.hold : C.navy, color: o.hold ? C.holdInk : "#fff", fontWeight: 700, fontSize: 10.5 }}>
+              <div style={{ padding: "5px 8px", fontFamily: MONO }}>OP {o.op}{o.hold ? " ★" : ""}</div>
+              <div style={{ padding: "5px 8px" }}>{islandDept(o.dept)} / {activeProfile("island").mapVerb(o.title)}</div>
+              <div style={{ padding: "5px 8px" }}>{o.title}{o.hold ? " — QA HOLD" : ""}</div>
+            </div>
+            {o.sub && o.sub.length ? <ol style={{ margin: "6px 0 6px 22px", fontSize: 10.5 }}>{o.sub.map((x, i) => <li key={i} style={{ margin: "2px 0" }}>{x}</li>)}</ol>
+              : <p style={{ margin: "5px 0", fontSize: 10.5 }}>{o.text}</p>}
+            <div style={{ border: "1.5px dashed #999", background: "#FBFBF9", padding: "8px 8px 4px", margin: "6px 0" }}>
+              <div dangerouslySetInnerHTML={{ __html: vig.svg }} />
+              <div style={{ textAlign: "center", fontWeight: 700, fontSize: 9, marginTop: 4 }}>FIGURE {o.op}-1 — {o.title.toUpperCase()}</div>
+              <div style={{ textAlign: "center", fontSize: 8.5, color: "#8A6D00", fontWeight: 700 }}>PLACEHOLDER RENDERING — REPLACE WITH PROCESS PHOTO AT RELEASE</div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "110px 1fr", border: `1px solid ${C.line}`, fontSize: 10 }}>
+              <div style={{ ...td, background: C.gray, fontWeight: 700 }}>Acceptance</div><div style={td}>{o.accept}</div>
+              <div style={{ ...td, background: C.gray, fontWeight: 700 }}>Record</div><div style={td}>{o.record}</div>
+            </div>
+          </div>
+        );
+      })}
+      <div style={{ textAlign: "center", color: "#999", fontSize: 9, marginTop: 16, letterSpacing: ".04em" }}>UNCONTROLLED WHEN PRINTED · ISLAND COMPONENTS GROUP · {esp}</div>
+    </Sheet>
+  );
+}
+function custDetGuessFlag(customer, bom) { const d = detectCustomer(bom); return d.guessed && d.value === customer; }
+
+function WIDocs({ bom, excluded, tops, m, profile, espByPn, customer }) {
+  const P = activeProfile(profile);
   const order = buildOrder(bom, excluded, tops);
   const th = { background: C.navy, color: "#fff", padding: "4px 6px", textAlign: "left", fontSize: 9.5 };
   const td = { border: `1px solid ${C.line}`, padding: "3px 6px", verticalAlign: "top", fontSize: 10.5 };
+  if (P.espMode) return order.map(pn => <ESPDoc key={pn} bom={bom} excluded={excluded} pn={pn} m={m} esp={espFor(pn, espByPn)} customer={customer} />);
   return order.map(pn => {
     const p = bom.parts[pn];
     const { tpl, ops } = opsFor(bom, excluded, pn);
@@ -1605,6 +2009,13 @@ function ImportPanel({ onCommit, existingCount, llmCfg }) {
   const fileRef = useRef(null);
 
   const openGrid = useCallback((grid, fileName, sheets, sheetIdx, wb, ov) => {
+    // xls/xlsx exports of ERP BOM reports (Standard sections / kitting-form levels)
+    const rep = parseReportGrid(grid);
+    if (rep && rep.rows.length) {
+      const label = rep.meta.format === "kitting-grid" ? "Kitting form / indentured levels" : `Standard BOM report (${(rep.meta.sections || []).length} sections)`;
+      ov = { ...(ov || {}), note: `Detected ${label} · ${rep.rows.length} rows` + (rep.meta.notes.length ? ` · excluded tooling: ${rep.meta.notes.join("; ").slice(0, 120)}` : "") + ((ov && ov.note) ? " · " + ov.note : "") };
+      grid = reportToGrid(rep);
+    }
     if (!grid.length) return;
     const { map, hasHeader } = guessMapping(grid);
     const mode = (ov && ov.mode) || (map.parent !== undefined ? "parent" : map.level !== undefined ? "level" : "flat");
@@ -1614,6 +2025,17 @@ function ImportPanel({ onCommit, existingCount, llmCfg }) {
     setPdfMsg(false);
   }, []);
   const openDrawingText = useCallback((text, fileName) => {
+    // ERP BOM reports (Exploded / Standard) take priority over drawing parts-list extraction
+    const fmt = detectReportFormat(text);
+    if (fmt) {
+      const parsed = fmt === "exploded" ? parseExplodedText(text) : parseStandardText(text);
+      if (parsed.rows.length) {
+        const note = `Detected ${fmt === "exploded" ? "Exploded BOM report (indentured levels)" : `Standard BOM report (${parsed.meta.sections.length} sections)`} · ${parsed.rows.length} rows` +
+          (parsed.meta.notes.length ? ` · ${parsed.meta.notes.length} tooling line(s) excluded` : "");
+        openGrid(reportToGrid(parsed), fileName || "BOM report", null, 0, null, { rawText: text, note });
+        return;
+      }
+    }
     const ex = extractFromDrawingText(text);
     if (!ex.rows.length) { setPdfMsg("No parts-list rows recognized in that drawing text. Paste the parts-list region (Find/Item, Qty, PN, Description)."); return; }
     const grid = [["Find", "Qty", "UOM", "PartNumber", "Rev", "Description"],
@@ -1965,14 +2387,14 @@ function DocWorks() {
   const projFileRef = useRef(null); const tplFileRef = useRef(null);
   const applyRows = rows => { setBom(buildBOM(rows, [])); setGenerated(null); setCheck(null); setSrcLabel(s => /\(edited\)$/.test(s) ? s : s + " (edited)"); };
   const download = (name, obj) => { const b = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 500); };
-  const exportProject = () => download("docworks_project.json", { version: "0.9", rows: bom.rows, srcLabel, activeCfg, excluded, purchased, meta: { wo, sn, prog, date, rev, eco, change }, customTemplates: customDecls });
+  const exportProject = () => download("docworks_project.json", { version: "0.9", rows: bom.rows, srcLabel, activeCfg, excluded, purchased, meta: { wo, sn, prog, date, rev, eco, change, profile, espByPn, customer }, customTemplates: customDecls });
   const importProject = f => { const rd = new FileReader(); rd.onload = () => { try {
       const j = JSON.parse(rd.result);
       if (!Array.isArray(j.rows)) throw new Error("no rows[]");
       setCustomDecls(j.customTemplates || []); setCustomTemplates(j.customTemplates || []);
       setBom(buildBOM(j.rows, [])); setSrcLabel(j.srcLabel || f.name); setActiveCfg(j.activeCfg || "actuator");
       setExcluded(j.excluded || {}); setPurchased(j.purchased || {});
-      const mm = j.meta || {}; setWo(mm.wo || ""); setSn(mm.sn || ""); setProg(mm.prog || "Sample Program"); setDate(mm.date || date); setRev(mm.rev || "1"); setEco(mm.eco || "ECO-0001"); setChange(mm.change || "INITIAL RELEASE (GENERATED)");
+      const mm = j.meta || {}; if (mm.profile) setProfile(mm.profile); if (mm.espByPn) setEspByPn(mm.espByPn); if (mm.customer) setCustomerOverride(mm.customer); setWo(mm.wo || ""); setSn(mm.sn || ""); setProg(mm.prog || "Sample Program"); setDate(mm.date || date); setRev(mm.rev || "1"); setEco(mm.eco || "ECO-0001"); setChange(mm.change || "INITIAL RELEASE (GENERATED)");
       setGenerated(null); setCheck(null);
     } catch (e) { alert("Project import failed: " + e.message); } }; rd.readAsText(f); };
   const importTemplates = f => { const rd = new FileReader(); rd.onload = () => { try {
@@ -1986,6 +2408,11 @@ function DocWorks() {
   const [tab, setTab] = useState("tree");
   const [generated, setGenerated] = useState(null);
   const [purchased, setPurchased] = useState({}); // pn -> true (user marked "purchased, no BOM expected")
+  const [profile, setProfile] = useState("ez"); // output profile: ez | island
+  const [espByPn, setEspByPn] = useState({});    // Island: per-assembly ESP number overrides
+  const custDet = useMemo(() => detectCustomer(bom), [bom]);
+  const [customerOverride, setCustomerOverride] = useState("");
+  const customer = customerOverride || custDet.value || "";
 
   const configs = useMemo(() => makeConfigs(bom), [bom]);
   const cfg = configs.find(c => c.id === activeCfg);
@@ -2045,7 +2472,7 @@ function DocWorks() {
       <div style={{ background: C.navy, color: "#fff", padding: "10px 18px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <div style={{ fontWeight: 800, letterSpacing: ".12em", fontSize: 16 }}>DOC<span style={{ color: "#F2C14E" }}>WORKS</span></div>
         <div style={{ opacity: .75, fontSize: 11.5, borderLeft: "1px solid rgba(255,255,255,.3)", paddingLeft: 14 }}>BOM / drawing import → Family Tree · Parts List · Traveler · Work Instruction | 100% local</div>
-        <div style={{ marginLeft: "auto", fontSize: 10.5, opacity: .65, fontFamily: MONO }}>v0.9.1 PROTOTYPE</div>
+        <div style={{ marginLeft: "auto", fontSize: 10.5, opacity: .65, fontFamily: MONO }}>v0.11 PROTOTYPE</div>
       </div>
 
       <div style={{ display: "flex", flex: 1, minHeight: 0, flexWrap: "wrap" }}>
@@ -2181,6 +2608,39 @@ function DocWorks() {
                 {showSettings && (
                   <div style={{ marginTop: 8, fontSize: 11, display: "grid", gap: 10 }}>
                     <div style={{ border: `1px solid ${C.line}`, padding: 8, background: "#fff" }}>
+                      <b style={{ fontSize: 10.5, letterSpacing: ".05em" }}>OUTPUT PROFILE</b>
+                      <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                        {Object.values(PROFILES).map(pr => (
+                          <button key={pr.id} onClick={() => setProfile(pr.id)}
+                            style={{ ...btn, fontSize: 10.5, flex: 1, background: profile === pr.id ? C.navy : "#fff", color: profile === pr.id ? "#fff" : C.ink, fontWeight: profile === pr.id ? 700 : 400 }}>
+                            {pr.label}
+                          </button>
+                        ))}
+                      </div>
+                      <div style={{ fontSize: 9.5, color: "#777", marginTop: 6 }}>Profile controls branding, document numbering, column labels, and vocabulary. Generation logic is identical; the Island profile emits Job Travelers + ESP procedures with the ICG title block.</div>
+                      {profile === "island" && (
+                        <div style={{ marginTop: 8, borderTop: `1px solid ${C.line}`, paddingTop: 8 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, minWidth: 66 }}>Customer</span>
+                            <input value={customerOverride} onChange={e => setCustomerOverride(e.target.value)}
+                              placeholder={custDet.value ? custDet.value + " (auto-detected)" : "enter customer"} style={{ ...inputS, flex: 1, fontSize: 10.5, marginTop: 0 }} />
+                            {custDet.guessed && !customerOverride && <span style={{ fontSize: 8.5, background: "#FFF200", padding: "1px 4px", fontWeight: 700 }}>auto</span>}
+                          </div>
+                          <div style={{ fontSize: 10, fontWeight: 700, margin: "6px 0 3px" }}>ESP procedure number per assembly</div>
+                          <div style={{ fontSize: 9, color: "#777", marginBottom: 4 }}>Blank = ESP-* (highlighted). Enter the ESP number for each made assembly (stack, stator, etc.).</div>
+                          {generated && generated.tops && buildOrder(bom, generated.excluded || {}, generated.tops).map(pn => (
+                            <div key={pn} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                              <span style={{ fontFamily: MONO, fontSize: 9.5, minWidth: 92 }}>{pn}</span>
+                              <span style={{ fontSize: 8.5, color: "#888", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(bom.parts[pn] || {}).desc}</span>
+                              <input value={espByPn[pn] || ""} onChange={e => setEspByPn(v => ({ ...v, [pn]: e.target.value }))}
+                                placeholder="ESP-*" style={{ ...inputS, width: 90, fontSize: 10, marginTop: 0 }} />
+                            </div>
+                          ))}
+                          {!generated && <div style={{ fontSize: 9, color: "#999", fontStyle: "italic" }}>Generate documents to list the assemblies here.</div>}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ border: `1px solid ${C.line}`, padding: 8, background: "#fff" }}>
                       <b style={{ fontSize: 10.5, letterSpacing: ".05em" }}>PROJECT</b>
                       <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
                         <button style={{ ...btn, fontSize: 10.5 }} onClick={exportProject}>Export project JSON</button>
@@ -2260,10 +2720,10 @@ function DocWorks() {
                 )}
               </div>
             )}
-            {generated && tab === "tree" && <TreeDoc bom={bom} excluded={generated.excluded} tops={generated.tops} cfgName={generated.cfgName} m={m} purchased={generated.purchased || {}} />}
-            {generated && tab === "plist" && <PartsListDoc bom={bom} excluded={generated.excluded} tops={generated.tops} cfgName={generated.cfgName} m={m} purchased={generated.purchased || {}} />}
-            {generated && tab === "trav" && <TravelerDocs bom={bom} excluded={generated.excluded} tops={generated.tops} m={m} />}
-            {generated && tab === "wi" && <WIDocs bom={bom} excluded={generated.excluded} tops={generated.tops} m={m} />}
+            {generated && tab === "tree" && <TreeDoc bom={bom} excluded={generated.excluded} tops={generated.tops} cfgName={generated.cfgName} m={m} purchased={generated.purchased || {}} profile={profile} customer={customer} />}
+            {generated && tab === "plist" && <PartsListDoc bom={bom} excluded={generated.excluded} tops={generated.tops} cfgName={generated.cfgName} m={m} purchased={generated.purchased || {}} profile={profile} customer={customer} />}
+            {generated && tab === "trav" && <TravelerDocs bom={bom} excluded={generated.excluded} tops={generated.tops} m={m} profile={profile} espByPn={espByPn} customer={customer} />}
+            {generated && tab === "wi" && <WIDocs bom={bom} excluded={generated.excluded} tops={generated.tops} m={m} profile={profile} espByPn={espByPn} customer={customer} />}
           </div>
         </div>
       </div>
