@@ -1396,7 +1396,12 @@ function sheetDims(sizeId) { return SHEET_SIZES[sizeId] || SHEET_SIZES.letter; }
    Sub-assemblies branch as sibling boxes. Vertical placement is dynamic (a node's
    children start below the node's box + its bullet list). Used for the 11x17 sheet. */
 function layoutBulletTree(bom, excluded, top, D) {
-    const NW = D.NW, NH = D.NH, GX = D.GX, BW = D.bulletW || 178, BLH = D.bulletLH || 9, VGAP = D.VGAP || 26;
+    // Components sit in a RIGHT-HAND column beside the assembly box (not below it),
+    // so the sub-assembly connector can exit the box bottom cleanly without crossing
+    // the component list. Each node occupies a block = [box | components column].
+    const NW = D.NW, NH = D.NH, GX = D.GX, BW = D.bulletW || 250, BLH = D.bulletLH || 13, VGAP = D.VGAP || 34;
+    const COLGAP = 10; // gap between box and its component column
+    const BOXGAP = 34; // gap between sibling assembly blocks
     function build(pn, row, depth, seen) {
         const cyc = seen.has(pn);
         const kidRows = cyc ? [] : (bom.children[pn] || []).filter(k => !excluded[k.pn]);
@@ -1408,32 +1413,41 @@ function layoutBulletTree(bom, excluded, top, D) {
         return { pn, row, depth, part: bom.parts[pn] || { pn, desc: "", rev: "-", mb: "" }, kids, asmK, leafK };
     }
     const root = build(top, null, 0, new Set());
+    // blockW = box + (component column to the right, if any)
     function width(n) {
         n.hasBullets = n.leafK.length > 0;
-        n.selfW = n.hasBullets ? Math.max(NW, BW) : NW;
+        n.compW = n.hasBullets ? BW : 0;
+        n.blockW = NW + (n.hasBullets ? COLGAP + n.compW : 0);
         n.asmK.forEach(width);
-        const childrenW = n.asmK.reduce((s, k) => s + k.w, 0) + GX * Math.max(0, n.asmK.length - 1);
-        n.w = Math.max(n.selfW, childrenW);
+        const childrenW = n.asmK.reduce((s, k) => s + k.blockW, 0) + BOXGAP * Math.max(0, n.asmK.length - 1);
+        n.w = Math.max(n.blockW, childrenW);
         return n.w;
     }
     width(root);
-    const bulletH = n => n.hasBullets ? (n.leafK.length * BLH + 12) : 0;
+    // block height = max(box height, component column height)
+    const compH = n => n.hasBullets ? (n.leafK.length * BLH + 8) : 0;
     function placeX(n, x) {
+        // n.boxX = left edge of the assembly box; box sits at the left of the block
         if (!n.asmK.length) {
-            n.x = x + n.w / 2;
+            n.boxX = x + (n.w - n.blockW) / 2;
+            n.x = n.boxX + NW / 2;
             return;
         }
-        const childrenW = n.asmK.reduce((s, k) => s + k.w, 0) + GX * Math.max(0, n.asmK.length - 1);
+        const childrenW = n.asmK.reduce((s, k) => s + k.blockW, 0) + BOXGAP * Math.max(0, n.asmK.length - 1);
         let cx = x + Math.max(0, (n.w - childrenW) / 2);
-        n.asmK.forEach(k => { placeX(k, cx); cx += k.w + GX; });
-        n.x = (n.asmK[0].x + n.asmK[n.asmK.length - 1].x) / 2;
+        n.asmK.forEach(k => { placeX(k, cx); cx += k.blockW + BOXGAP; });
+        // parent box centers over the span of child BOXES (not their component columns)
+        const boxCenters = n.asmK.map(k => k.x);
+        const mid = (Math.min(...boxCenters) + Math.max(...boxCenters)) / 2;
+        n.boxX = mid - NW / 2;
+        n.x = mid;
     }
     placeX(root, 0);
     let maxY = 0;
     (function placeY(n, topY) {
         n.y = topY;
-        n.bH = bulletH(n);
-        const below = topY + NH + n.bH;
+        n.blockH = Math.max(NH, compH(n));
+        const below = topY + n.blockH;
         maxY = Math.max(maxY, below);
         if (n.asmK.length) {
             const ct = below + VGAP;
@@ -1442,7 +1456,7 @@ function layoutBulletTree(bom, excluded, top, D) {
     })(root, 0);
     const flat = [];
     (function w(n) { flat.push(n); n.asmK.forEach(w); })(root);
-    return { root, flat, totalW: root.w, totalH: maxY, bullet: true };
+    return { root, flat, totalW: root.w, totalH: maxY, bullet: true, rightColumn: true };
 }
 function layoutTree2(bom, excluded, top, collapse, stackMode, D) {
     D = D || sheetDims("letter");
@@ -1575,56 +1589,64 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
     const NW = D.NW, NH = D.NH, GX = D.GX, ROWH = D.ROWH;
     const compact = D.oneSheet;
     const fPN = D.fontPN, fD = compact ? 7.5 : 7.2, fQ = compact ? 8 : 8, dLines = D.descLines, dChars = D.descChars;
+    const fBullet = D.bulletFont || 9.5;
     const PADX = 20, PADY = 16, CALLOUT_H = compact ? 30 : 46;
     const callouts = L.flat.filter(n => !n.isStacked && n.inline && n.inline.length && n.inline.every(k => !k.kids.length && !k.collapsed) && !(n.stacked && n.stacked.length) && n.depth >= 1);
     const H = L.totalH + (callouts.length ? CALLOUT_H : 0) + 26 + PADY * 2;
     const W = L.totalW + PADX * 2;
     // ---- BULLET LAYOUT RENDER (ICG house style) ----
     if (L.bullet) {
-        const BLH = D.bulletLH || 9, BW = D.bulletW || 178;
+        const BLH = D.bulletLH || 13, BW = D.bulletW || 250, COLGAP = 10;
+        const FONT = '"Arial","Helvetica",sans-serif'; // bolder, more legible than mono for the tree
         const bels = [];
         const truncate = (s, nchar) => { s = String(s || "").toUpperCase(); return s.length > nchar ? s.slice(0, nchar - 1) + "…" : s; };
+        // component-label char budget derived from column width (so nothing clips off the side)
+        const compChars = Math.max(24, Math.floor((BW - 14) / 5.4));
         for (const n of L.flat) {
-            const nx = PADX + n.x - NW / 2, ny = PADY + n.y;
+            const bx0 = PADX + (n.boxX != null ? n.boxX : n.x - NW / 2), ny = PADY + n.y;
             const isTop = n.depth === 0;
             const missing = !n.kids.length && isAssemblyLike(n.part) && !purchased[n.pn];
             const isPurch = !n.kids.length && isAssemblyLike(n.part) && purchased[n.pn];
             const key = n.pn + "_" + n.depth + "_" + Math.round(n.x);
             // assembly box
-            bels.push(React.createElement("rect", { key: "b" + key, x: nx, y: ny, width: NW, height: NH, rx: 3, fill: missing ? "#FFF9E8" : "#fff", stroke: missing ? "#B8860B" : isTop ? C.navy : C.navy2, strokeWidth: isTop ? 2 : 1.3, strokeDasharray: missing ? "5 3" : "none" }));
-            bels.push(React.createElement("text", { key: "p" + key, x: nx + NW / 2, y: ny + 13, textAnchor: "middle", fontFamily: MONO, fontSize: fPN, fontWeight: 700, fill: isTop ? C.navy : C.navy2 }, n.pn));
-            wrapText(n.part.desc, dChars, 1).forEach((l) => bels.push(React.createElement("text", { key: "d" + key, x: nx + NW / 2, y: ny + 22, textAnchor: "middle", fontSize: fD, fill: "#333" }, l)));
-            bels.push(React.createElement("text", { key: "q" + key, x: nx + NW / 2, y: ny + NH - 5, textAnchor: "middle", fontSize: fQ, fontWeight: 600, fill: "#222" }, "QTY: " + (n.row ? n.row.qty : "1")));
+            bels.push(React.createElement("rect", { key: "b" + key, x: bx0, y: ny, width: NW, height: NH, rx: 3, fill: missing ? "#FFF9E8" : isTop ? "#EEF3FB" : "#fff", stroke: missing ? "#B8860B" : isTop ? C.navy : C.navy2, strokeWidth: isTop ? 2.2 : 1.5, strokeDasharray: missing ? "5 3" : "none" }));
+            bels.push(React.createElement("text", { key: "p" + key, x: bx0 + NW / 2, y: ny + 15, textAnchor: "middle", fontFamily: FONT, fontSize: fPN, fontWeight: 800, fill: isTop ? C.navy : C.navy2 }, n.pn));
+            wrapText(n.part.desc, dChars, 2).forEach((l, li) => bels.push(React.createElement("text", { key: "d" + key + li, x: bx0 + NW / 2, y: ny + 26 + li * 9, textAnchor: "middle", fontFamily: FONT, fontSize: fD, fontWeight: 600, fill: "#333" }, l)));
+            bels.push(React.createElement("text", { key: "q" + key, x: bx0 + NW / 2, y: ny + NH - 5, textAnchor: "middle", fontFamily: FONT, fontSize: fQ, fontWeight: 700, fill: "#111" }, "QTY: " + (n.row ? n.row.qty : "1")));
             if (missing)
-                bels.push(React.createElement("text", { key: "m" + key, x: nx + NW / 2, y: ny + NH + 8, textAnchor: "middle", fontSize: 6.5, fontWeight: 700, fill: "#B8860B" }, "\u25B2 NO BOM"));
+                bels.push(React.createElement("text", { key: "m" + key, x: bx0 + NW / 2, y: ny + NH + 9, textAnchor: "middle", fontFamily: FONT, fontSize: 7, fontWeight: 700, fill: "#B8860B" }, "\u25B2 NO BOM"));
             if (isPurch)
-                bels.push(React.createElement("text", { key: "u" + key, x: nx + NW / 2, y: ny + NH + 8, textAnchor: "middle", fontSize: 6.5, fontWeight: 700, fill: "#666" }, "(PURCHASED)"));
-            // bullet list of leaf components under the box
+                bels.push(React.createElement("text", { key: "u" + key, x: bx0 + NW / 2, y: ny + NH + 9, textAnchor: "middle", fontFamily: FONT, fontSize: 7, fontWeight: 700, fill: "#666" }, "(PURCHASED)"));
+            // component list to the RIGHT of the box (right-hand column)
             if (n.hasBullets) {
-                const bx = nx + 4, by = ny + NH + 8;
-                // left rail
-                bels.push(React.createElement("line", { key: "rail" + key, x1: bx, y1: by - 2, x2: bx, y2: by + n.leafK.length * BLH - 3, stroke: "#999", strokeWidth: .8 }));
+                const colX = bx0 + NW + COLGAP;
+                const by = ny + 2;
+                // connector: from box right-mid to the column
+                const midY = ny + NH / 2;
+                bels.push(React.createElement("line", { key: "cc" + key, x1: bx0 + NW, y1: midY, x2: colX - 3, y2: midY, stroke: "#999", strokeWidth: 1 }));
+                // vertical rail down the column
+                bels.push(React.createElement("line", { key: "rail" + key, x1: colX, y1: by, x2: colX, y2: by + n.leafK.length * BLH, stroke: "#bbb", strokeWidth: .8 }));
                 n.leafK.forEach((k, i) => {
-                    const ly = by + i * BLH + 4;
-                    bels.push(React.createElement("line", { key: "bl" + key + i, x1: bx, y1: ly - 2.5, x2: bx + 5, y2: ly - 2.5, stroke: "#999", strokeWidth: .8 }));
+                    const ly = by + i * BLH + 9;
+                    bels.push(React.createElement("line", { key: "bl" + key + i, x1: colX, y1: ly - 3, x2: colX + 5, y2: ly - 3, stroke: "#bbb", strokeWidth: .8 }));
                     const qty = k.row ? k.row.qty : "1";
-                    const label = k.pn + "  " + truncate(k.part.desc, 34) + "  (" + qty + ")";
+                    const label = k.pn + "  " + truncate(k.part.desc, compChars) + "  (" + qty + ")";
                     const km = !k.kids.length && isAssemblyLike(k.part) && !purchased[k.pn];
-                    bels.push(React.createElement("text", { key: "bt" + key + i, x: bx + 9, y: ly, fontSize: 9.5, fill: km ? "#B8860B" : "#222", fontFamily: MONO },
+                    bels.push(React.createElement("text", { key: "bt" + key + i, x: colX + 9, y: ly, fontFamily: FONT, fontSize: fBullet, fontWeight: 500, fill: km ? "#B8860B" : "#1A1A1E" },
                         label,
                         km ? " ▲" : ""));
                 });
             }
-            // connectors to sub-assembly children
+            // connector to sub-assemblies: exits the BOX BOTTOM (clean, no list crossing)
             if (n.asmK && n.asmK.length) {
-                const busY = ny + NH + n.bH + (D.VGAP || 26) / 2;
-                const px = PADX + n.x;
-                bels.push(React.createElement("line", { key: "v" + key, x1: px, y1: ny + NH + n.bH, x2: px, y2: busY, stroke: "#444", strokeWidth: 1 }));
+                const busY = ny + NH + (D.VGAP || 34) / 2;
+                const px = bx0 + NW / 2;
+                bels.push(React.createElement("line", { key: "v" + key, x1: px, y1: ny + NH, x2: px, y2: busY, stroke: C.navy, strokeWidth: 1.2 }));
                 const ends = [px];
-                n.asmK.forEach(k => { ends.push(PADX + k.x); bels.push(React.createElement("line", { key: "c" + key + k.pn, x1: PADX + k.x, y1: busY, x2: PADX + k.x, y2: PADY + k.y, stroke: "#444", strokeWidth: 1 })); });
+                n.asmK.forEach(k => { const kpx = PADX + (k.boxX != null ? k.boxX + NW / 2 : k.x); ends.push(kpx); bels.push(React.createElement("line", { key: "c" + key + k.pn, x1: kpx, y1: busY, x2: kpx, y2: PADY + k.y, stroke: C.navy, strokeWidth: 1.2 })); });
                 const x1 = Math.min(...ends), x2 = Math.max(...ends);
                 if (x2 > x1)
-                    bels.push(React.createElement("line", { key: "h" + key, x1: x1, y1: busY, x2: x2, y2: busY, stroke: "#444", strokeWidth: 1 }));
+                    bels.push(React.createElement("line", { key: "h" + key, x1: x1, y1: busY, x2: x2, y2: busY, stroke: C.navy, strokeWidth: 1.2 }));
             }
         }
         const cap = D.usableW;
@@ -3030,6 +3052,41 @@ async function saveOut(filename, blob) {
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     return "download";
 }
+async function exportPaneAsPDF(paneEl, title, pageSize) {
+    // Print the exact preview via the browser's own renderer -> user picks "Save as PDF".
+    // pageSize: "letter" | "tabloid-landscape" | "tabloid-portrait"
+    const svgClones = [];
+    // inline computed background so print shows shading
+    const win = window.open("", "_blank");
+    if (!win)
+        throw new Error("Popup blocked — allow popups for this site to export PDF.");
+    const sizeCSS = pageSize === "tabloid-landscape" ? "17in 11in"
+        : pageSize === "tabloid-portrait" ? "11in 17in" : "8.5in 11in";
+    const html = paneEl.innerHTML;
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>
+<style>
+  @page { size: ${sizeCSS}; margin: 0.4in; }
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; background: #fff; }
+  svg { max-width: none !important; }
+  @media print { .noprint { display: none !important; } }
+  .barp { position: fixed; top: 0; left: 0; right: 0; background: #1F3864; color: #fff; padding: 10px 16px; font: 13px Segoe UI, Arial; z-index: 99; display: flex; gap: 12px; align-items: center; }
+  .barp button { background: #fff; color: #1F3864; border: none; padding: 6px 14px; font-weight: 700; border-radius: 3px; cursor: pointer; }
+  .content { margin-top: 0; }
+  @media screen { .content { margin-top: 52px; padding: 16px; } }
+</style></head><body>
+<div class="barp noprint"><b>DocWorks — Print to PDF</b><button onclick="window.print()">🖨 Print / Save as PDF</button><span style="font-weight:400;font-size:12px">In the dialog choose "Save as PDF" as the destination${pageSize !== "letter" ? ' and set paper to <b>Tabloid / 11×17</b> ' + (pageSize.includes("landscape") ? "Landscape" : "Portrait") : ""}.</span></div>
+<div class="content">${html}</div>
+</body></html>`);
+    win.document.close();
+    // give layout a tick, then auto-open print dialog
+    setTimeout(() => { try {
+        win.focus();
+        win.print();
+    }
+    catch (e) { } }, 600);
+    return "print";
+}
 async function exportPaneAsWord(paneEl, filename, landscape) {
     try {
         const blob = await domToDocx(paneEl, filename, landscape);
@@ -3247,7 +3304,7 @@ function DocWorks() {
                 "DOC",
                 React.createElement("span", { style: { color: "#F2C14E" } }, "WORKS")),
             React.createElement("div", { style: { opacity: .75, fontSize: 11.5, borderLeft: "1px solid rgba(255,255,255,.3)", paddingLeft: 14 } }, "BOM / drawing import \u2192 Family Tree \u00B7 Parts List \u00B7 Traveler \u00B7 Work Instruction | 100% local"),
-            React.createElement("div", { style: { marginLeft: "auto", fontSize: 10.5, opacity: .65, fontFamily: MONO } }, "v0.16 PROTOTYPE")),
+            React.createElement("div", { style: { marginLeft: "auto", fontSize: 10.5, opacity: .65, fontFamily: MONO } }, "v0.17 PROTOTYPE")),
         React.createElement("div", { style: { display: "flex", flex: 1, minHeight: 0, flexWrap: "wrap" } },
             React.createElement("div", { style: { width: 400, minWidth: 310, flexShrink: 0, background: C.paper, borderRight: `1px solid ${C.line}`, padding: 16, overflowY: "auto", maxHeight: "calc(100vh - 46px)" } },
                 React.createElement("div", { style: { marginBottom: 18 } },
@@ -3454,6 +3511,18 @@ function DocWorks() {
                 generated && (React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center", padding: "6px 16px", borderBottom: `1px solid ${C.line}`, background: "#FCFCFA", flexWrap: "wrap" } },
                     React.createElement("button", { onClick: () => setEditMode(v => !v), style: { border: `1px solid ${editMode ? "#B8860B" : C.navy}`, background: editMode ? "#FFF6DC" : "#fff", color: editMode ? "#8A6D00" : C.navy, padding: "4px 10px", fontSize: 11, fontWeight: 700, borderRadius: 2, cursor: "pointer" } }, editMode ? "✎ Editing ON — click text · right-click rows" : "✎ Edit documents"),
                     React.createElement("button", { onClick: async () => { try {
+                            setExportMsg("Opening print view…");
+                            const names = { tree: "Family_Tree", plist: "Parts_List", trav: "Travelers", wi: profile === "island" ? "ESP_Procedures" : "Work_Instructions" };
+                            const ps = tab === "tree" ? (sheetSize === "tabloid" ? "tabloid-landscape" : "letter") : "letter";
+                            await exportPaneAsPDF(docsRef.current, "DocWorks " + names[tab], ps);
+                            setExportMsg("Print view opened — choose Save as PDF");
+                            setTimeout(() => setExportMsg(""), 4000);
+                        }
+                        catch (e) {
+                            setExportMsg(e.message);
+                            setTimeout(() => setExportMsg(""), 5000);
+                        } }, style: { border: `1px solid ${C.navy}`, background: C.navy, color: "#fff", padding: "4px 12px", fontSize: 11, fontWeight: 700, borderRadius: 2, cursor: "pointer" } }, "\u2B07 Save as PDF (exact)"),
+                    React.createElement("button", { onClick: async () => { try {
                             setExportMsg("Exporting…");
                             const names = { tree: "Family_Tree", plist: "Parts_List", trav: "Travelers", wi: profile === "island" ? "ESP_Procedures" : "Work_Instructions" };
                             const where = await exportPaneAsWord(docsRef.current, "DocWorks_" + names[tab] + "_" + (generated.tops || []).join("+"), tab === "tree" && sheetSize === "tabloid");
@@ -3462,7 +3531,7 @@ function DocWorks() {
                         }
                         catch (e) {
                             setExportMsg("Export failed: " + e.message);
-                        } }, style: { border: `1px solid ${C.navy}`, background: "#fff", color: C.navy, padding: "4px 10px", fontSize: 11, fontWeight: 600, borderRadius: 2, cursor: "pointer" } }, "\u2B07 Export Word (.docx)"),
+                        } }, style: { border: `1px solid ${C.navy}`, background: "#fff", color: C.navy, padding: "4px 10px", fontSize: 11, fontWeight: 600, borderRadius: 2, cursor: "pointer" } }, "\u2B07 Word (.docx)"),
                     tab === "plist" && (React.createElement("button", { onClick: async () => { try {
                             const where = await exportTableAsXlsx(docsRef.current, "DocWorks_Parts_List_" + (generated.tops || []).join("+"));
                             setExportMsg(where === "folder" ? "Saved to folder ✓" : "Downloaded ✓");
