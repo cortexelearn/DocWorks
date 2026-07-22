@@ -1,6 +1,6 @@
 (() => {
 "use strict";
-const { useState, useMemo, useCallback, useRef } = React;
+const { useState, useMemo, useCallback, useRef, useEffect } = React;
 const XLSX = window.XLSX;
 /* =====================================================================
    DOCWORKS — drawing-style family tree (readable letter-size sheet sets) · multi-file import · missing-BOM resolution
@@ -1388,9 +1388,62 @@ const MAXH_SUB = 560; // px; sub-sheets have more room
 // SHEET SIZES: "letter" = readable multi-sheet set; "tabloid" = one 11x17 sheet, compact
 const SHEET_SIZES = {
     letter: { NW: 118, NH: 60, GX: 12, ROWH: 116, descLines: 3, descChars: 19, fontPN: 11, MAXW: 980, usableW: 984, oneSheet: false },
-    tabloid: { NW: 86, NH: 40, GX: 8, ROWH: 74, descLines: 1, descChars: 16, fontPN: 8.5, MAXW: 100000, usableW: 1560, oneSheet: true },
+    tabloid: { NW: 92, NH: 40, GX: 22, ROWH: 74, descLines: 1, descChars: 16, fontPN: 8.5, MAXW: 100000, usableW: 1560, oneSheet: true, bulletLeaves: true, bulletW: 178, bulletLH: 9, VGAP: 26 },
 };
 function sheetDims(sizeId) { return SHEET_SIZES[sizeId] || SHEET_SIZES.letter; }
+/* BULLET LAYOUT (ICG house style): assemblies are boxed; their component (leaf)
+   children are listed as an indented bullet list directly beneath the box with qty.
+   Sub-assemblies branch as sibling boxes. Vertical placement is dynamic (a node's
+   children start below the node's box + its bullet list). Used for the 11x17 sheet. */
+function layoutBulletTree(bom, excluded, top, D) {
+    const NW = D.NW, NH = D.NH, GX = D.GX, BW = D.bulletW || 178, BLH = D.bulletLH || 9, VGAP = D.VGAP || 26;
+    function build(pn, row, depth, seen) {
+        const cyc = seen.has(pn);
+        const kidRows = cyc ? [] : (bom.children[pn] || []).filter(k => !excluded[k.pn]);
+        const ns = new Set(seen);
+        ns.add(pn);
+        const kids = kidRows.map(k => build(k.pn, k, depth + 1, ns));
+        const asmK = kids.filter(k => k.kids.length);
+        const leafK = kids.filter(k => !k.kids.length);
+        return { pn, row, depth, part: bom.parts[pn] || { pn, desc: "", rev: "-", mb: "" }, kids, asmK, leafK };
+    }
+    const root = build(top, null, 0, new Set());
+    function width(n) {
+        n.hasBullets = n.leafK.length > 0;
+        n.selfW = n.hasBullets ? Math.max(NW, BW) : NW;
+        n.asmK.forEach(width);
+        const childrenW = n.asmK.reduce((s, k) => s + k.w, 0) + GX * Math.max(0, n.asmK.length - 1);
+        n.w = Math.max(n.selfW, childrenW);
+        return n.w;
+    }
+    width(root);
+    const bulletH = n => n.hasBullets ? (n.leafK.length * BLH + 12) : 0;
+    function placeX(n, x) {
+        if (!n.asmK.length) {
+            n.x = x + n.w / 2;
+            return;
+        }
+        const childrenW = n.asmK.reduce((s, k) => s + k.w, 0) + GX * Math.max(0, n.asmK.length - 1);
+        let cx = x + Math.max(0, (n.w - childrenW) / 2);
+        n.asmK.forEach(k => { placeX(k, cx); cx += k.w + GX; });
+        n.x = (n.asmK[0].x + n.asmK[n.asmK.length - 1].x) / 2;
+    }
+    placeX(root, 0);
+    let maxY = 0;
+    (function placeY(n, topY) {
+        n.y = topY;
+        n.bH = bulletH(n);
+        const below = topY + NH + n.bH;
+        maxY = Math.max(maxY, below);
+        if (n.asmK.length) {
+            const ct = below + VGAP;
+            n.asmK.forEach(k => placeY(k, ct));
+        }
+    })(root, 0);
+    const flat = [];
+    (function w(n) { flat.push(n); n.asmK.forEach(w); })(root);
+    return { root, flat, totalW: root.w, totalH: maxY, bullet: true };
+}
 function layoutTree2(bom, excluded, top, collapse, stackMode, D) {
     D = D || sheetDims("letter");
     const NW = D.NW, NH = D.NH, GX = D.GX, ROWH = D.ROWH, STACK_PITCH = D.NH + 12;
@@ -1470,7 +1523,7 @@ function planSheets(bom, excluded, top, maxH, D) {
     D = D || sheetDims("letter");
     // ONE-SHEET (11x17) mode: whole tree on a single sheet, stacked ladders on, no pagination
     if (D.oneSheet) {
-        let L = layoutTree2(bom, excluded, top, null, true, D);
+        let L = D.bulletLeaves ? layoutBulletTree(bom, excluded, top, D) : layoutTree2(bom, excluded, top, null, true, D);
         return [{ top, collapse: new Set(), refs: {}, layout: L, sheetNo: 1, oneSheet: true }];
     }
     maxH = maxH || MAXH_MAIN;
@@ -1526,6 +1579,60 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
     const callouts = L.flat.filter(n => !n.isStacked && n.inline && n.inline.length && n.inline.every(k => !k.kids.length && !k.collapsed) && !(n.stacked && n.stacked.length) && n.depth >= 1);
     const H = L.totalH + (callouts.length ? CALLOUT_H : 0) + 26 + PADY * 2;
     const W = L.totalW + PADX * 2;
+    // ---- BULLET LAYOUT RENDER (ICG house style) ----
+    if (L.bullet) {
+        const BLH = D.bulletLH || 9, BW = D.bulletW || 178;
+        const bels = [];
+        const truncate = (s, nchar) => { s = String(s || "").toUpperCase(); return s.length > nchar ? s.slice(0, nchar - 1) + "…" : s; };
+        for (const n of L.flat) {
+            const nx = PADX + n.x - NW / 2, ny = PADY + n.y;
+            const isTop = n.depth === 0;
+            const missing = !n.kids.length && isAssemblyLike(n.part) && !purchased[n.pn];
+            const isPurch = !n.kids.length && isAssemblyLike(n.part) && purchased[n.pn];
+            const key = n.pn + "_" + n.depth + "_" + Math.round(n.x);
+            // assembly box
+            bels.push(React.createElement("rect", { key: "b" + key, x: nx, y: ny, width: NW, height: NH, rx: 3, fill: missing ? "#FFF9E8" : "#fff", stroke: missing ? "#B8860B" : isTop ? C.navy : C.navy2, strokeWidth: isTop ? 2 : 1.3, strokeDasharray: missing ? "5 3" : "none" }));
+            bels.push(React.createElement("text", { key: "p" + key, x: nx + NW / 2, y: ny + 13, textAnchor: "middle", fontFamily: MONO, fontSize: fPN, fontWeight: 700, fill: isTop ? C.navy : C.navy2 }, n.pn));
+            wrapText(n.part.desc, dChars, 1).forEach((l) => bels.push(React.createElement("text", { key: "d" + key, x: nx + NW / 2, y: ny + 22, textAnchor: "middle", fontSize: fD, fill: "#333" }, l)));
+            bels.push(React.createElement("text", { key: "q" + key, x: nx + NW / 2, y: ny + NH - 5, textAnchor: "middle", fontSize: fQ, fontWeight: 600, fill: "#222" }, "QTY: " + (n.row ? n.row.qty : "1")));
+            if (qaField)
+                bels.push(React.createElement("text", { key: "qa" + key, x: nx + 3, y: ny + NH + 8, fontSize: 6, fill: "#0B6FB8", fontWeight: 700 }, "Q.A. ____"));
+            if (missing)
+                bels.push(React.createElement("text", { key: "m" + key, x: nx + NW / 2, y: ny + NH + 8, textAnchor: "middle", fontSize: 6.5, fontWeight: 700, fill: "#B8860B" }, "\u25B2 NO BOM"));
+            if (isPurch)
+                bels.push(React.createElement("text", { key: "u" + key, x: nx + NW / 2, y: ny + NH + 8, textAnchor: "middle", fontSize: 6.5, fontWeight: 700, fill: "#666" }, "(PURCHASED)"));
+            // bullet list of leaf components under the box
+            if (n.hasBullets) {
+                const bx = nx + 4, by = ny + NH + 8;
+                // left rail
+                bels.push(React.createElement("line", { key: "rail" + key, x1: bx, y1: by - 2, x2: bx, y2: by + n.leafK.length * BLH - 3, stroke: "#999", strokeWidth: .8 }));
+                n.leafK.forEach((k, i) => {
+                    const ly = by + i * BLH + 4;
+                    bels.push(React.createElement("line", { key: "bl" + key + i, x1: bx, y1: ly - 2.5, x2: bx + 5, y2: ly - 2.5, stroke: "#999", strokeWidth: .8 }));
+                    const qty = k.row ? k.row.qty : "1";
+                    const label = k.pn + "  " + truncate(k.part.desc, 26) + "  (" + qty + ")";
+                    const km = !k.kids.length && isAssemblyLike(k.part) && !purchased[k.pn];
+                    bels.push(React.createElement("text", { key: "bt" + key + i, x: bx + 8, y: ly, fontSize: 6.6, fill: km ? "#B8860B" : "#222", fontFamily: MONO },
+                        label,
+                        km ? " ▲" : ""));
+                });
+            }
+            // connectors to sub-assembly children
+            if (n.asmK && n.asmK.length) {
+                const busY = ny + NH + n.bH + (D.VGAP || 26) / 2;
+                const px = PADX + n.x;
+                bels.push(React.createElement("line", { key: "v" + key, x1: px, y1: ny + NH + n.bH, x2: px, y2: busY, stroke: "#444", strokeWidth: 1 }));
+                const ends = [px];
+                n.asmK.forEach(k => { ends.push(PADX + k.x); bels.push(React.createElement("line", { key: "c" + key + k.pn, x1: PADX + k.x, y1: busY, x2: PADX + k.x, y2: PADY + k.y, stroke: "#444", strokeWidth: 1 })); });
+                const x1 = Math.min(...ends), x2 = Math.max(...ends);
+                if (x2 > x1)
+                    bels.push(React.createElement("line", { key: "h" + key, x1: x1, y1: busY, x2: x2, y2: busY, stroke: "#444", strokeWidth: 1 }));
+            }
+        }
+        const cap = D.usableW;
+        const svg = React.createElement("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMid meet", style: D.oneSheet ? { width: "100%", maxWidth: cap, maxHeight: 560, height: "auto", display: "block", margin: "0 auto" } : (fit ? { width: Math.min(W, cap), maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" } : { width: W, height: "auto", display: "block" }), xmlns: "http://www.w3.org/2000/svg" }, bels);
+        return { svg, W };
+    }
     const els = [];
     for (const n of L.flat) {
         const nx = PADX + n.x - NW / 2, ny = PADY + n.y;
@@ -1577,7 +1684,7 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
         els.push(React.createElement("line", { key: "cl" + n.pn, x1: PADX + n.x, y1: PADY + (n.depth + 1) * ROWH + NH, x2: PADX + n.x, y2: cy, stroke: "#888", strokeWidth: .8, strokeDasharray: "3 3" }));
     }
     const cap = D.usableW;
-    const svg = React.createElement("svg", { viewBox: `0 0 ${W} ${H}`, style: fit ? { width: Math.min(W, cap), maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" } : { width: W, height: "auto", display: "block" }, xmlns: "http://www.w3.org/2000/svg" }, els);
+    const svg = React.createElement("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMid meet", style: D.oneSheet ? { width: "100%", maxWidth: cap, maxHeight: 560, height: "auto", display: "block", margin: "0 auto" } : (fit ? { width: Math.min(W, cap), maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" } : { width: W, height: "auto", display: "block" }), xmlns: "http://www.w3.org/2000/svg" }, els);
     return { svg, W };
 }
 function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer, sheetSize }) {
@@ -1603,7 +1710,7 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer
     const tbC = { padding: "3px 8px", borderBottom: `1px solid ${C.line}`, borderRight: `1px solid ${C.line}`, fontSize: 9 };
     const oneSheet = D.oneSheet;
     return (React.createElement(Sheet, { wide: oneSheet },
-        React.createElement("div", { style: { border: `1.5px solid #111`, marginBottom: 12 } },
+        React.createElement("div", { style: { border: `1.5px solid #111`, marginBottom: oneSheet ? 6 : 12 } },
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "200px 1fr 250px" } },
                 React.createElement("div", { style: { padding: "8px 10px", borderRight: "1px solid #111" } },
                     P.id === "island"
@@ -1633,18 +1740,19 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer
         allSheets.map(sh => {
             const d = SheetDrawing({ bom, sheet: sh, purchased, fit: oneSheet ? true : fit, qaField: P.qaField });
             const shTop = bom.parts[sh.top] || {};
-            return (React.createElement("div", { key: sh.sheetNo, style: { border: "1px solid #111", marginBottom: 10, background: "#fff" } },
+            return (React.createElement("div", { key: sh.sheetNo, style: { border: "1px solid #111", marginBottom: oneSheet ? 4 : 10, background: "#fff", breakInside: "avoid", pageBreakInside: "avoid" } },
                 React.createElement("div", { style: { borderBottom: "1px solid #111", padding: "3px 8px", fontSize: 9, display: "flex", justifyContent: "space-between", background: "#FAFAF8" } },
                     React.createElement("span", { style: { fontWeight: 700 } },
                         "SHEET ",
                         sh.sheetNo,
                         " OF ",
                         nSheets,
-                        sh.sheetNo > 1 ? ` — SUBASSEMBLY: ${sh.top}` : ""),
+                        sh.sheetNo > 1 ? ` — SUBASSEMBLY: ${sh.top}` : "",
+                        oneSheet ? " — 11×17" : ""),
                     React.createElement("span", { style: { fontFamily: MONO, color: "#666" } }, sh.sheetNo === 1 ? tops.join(" + ") : (shTop.desc || "").toUpperCase())),
-                React.createElement("div", { style: { padding: 8, overflowX: fit ? "hidden" : "auto" } }, fit ? d.svg : React.createElement("div", { style: { width: d.W, minWidth: d.W } }, d.svg))));
+                React.createElement("div", { style: { padding: 8, overflowX: fit ? "hidden" : "auto", display: "flex", justifyContent: "center" } }, fit ? d.svg : React.createElement("div", { style: { width: d.W, minWidth: d.W } }, d.svg))));
         }),
-        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "150px 1fr 250px", gap: 10, marginBottom: 12 } },
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "150px 1fr 250px", gap: 8, marginBottom: 6, fontSize: oneSheet ? 7.5 : 8 } },
             React.createElement("div", { style: { border: "1px solid #111", padding: 8, fontSize: 8 } },
                 React.createElement("div", { style: { fontWeight: 700, marginBottom: 6 } }, "LEGEND"),
                 React.createElement("div", { style: { display: "flex", gap: 6, alignItems: "center", marginBottom: 4 } },
@@ -1929,7 +2037,7 @@ function PartsListDoc({ bom, excluded, tops, cfgName, m, purchased, profile, cus
     const td = { border: `1px solid ${C.line}`, padding: "3px 6px", verticalAlign: "top", fontSize: 10 };
     const tbC = { padding: "3px 8px", borderBottom: `1px solid ${C.line}`, borderRight: `1px solid ${C.line}`, fontSize: 9 };
     return (React.createElement(Sheet, null,
-        React.createElement("div", { style: { border: `1.5px solid #111`, marginBottom: 12 } },
+        React.createElement("div", { style: { border: `1.5px solid #111`, marginBottom: oneSheet ? 6 : 12 } },
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "200px 1fr 250px" } },
                 React.createElement("div", { style: { padding: "8px 10px", borderRight: "1px solid #111" } },
                     P.id === "island"
@@ -1995,6 +2103,12 @@ function IslandBrandBlock({ sub }) {
         React.createElement("img", { src: ISLAND_LOGO, alt: "Island Components", style: { height: 52, display: "block", margin: "0 auto 3px" } }),
         React.createElement("div", { style: { fontSize: 8, color: "#555" } }, "ISLAND COMPONENTS GROUP, INC. \u00B7 210 Marcus Blvd. Hauppauge, N.Y. 11788 \u00B7 Tel (631) 563-4224"),
         sub && React.createElement("div", { style: { fontSize: 8, color: "#777" } }, sub)));
+}
+function travelerBrief(o) {
+    // one concise sentence for the traveler; the ESP carries full detail
+    const t = (o.text || "").replace(/\s+/g, " ").trim();
+    const first = t.split(/(?<=[.!?])\s/)[0] || t;
+    return first.length > 150 ? first.slice(0, 147) + "…" : first;
 }
 function IslandTravelerHeader({ p, pn, m, esp, customer }) {
     const cell = { padding: "4px 8px", border: "1px solid #999", fontSize: 10.5 };
@@ -2081,7 +2195,12 @@ function TravelerDocs({ bom, excluded, tops, m, profile, espByPn, customer }) {
                                 o.title,
                                 "."),
                             " ",
-                            o.text) : o.text),
+                            travelerBrief(o),
+                            " ",
+                            React.createElement("span", { style: { color: "#555" } },
+                                "Refer to ",
+                                espFor(pn, espByPn),
+                                " for detailed method.")) : o.text),
                         !P.espMode && React.createElement("td", { style: td }, o.accept),
                         React.createElement("td", { style: { ...td, width: 46, verticalAlign: "bottom" } }, blank),
                         React.createElement("td", { style: { ...td, width: 46, verticalAlign: "bottom" } }, blank),
@@ -2729,46 +2848,137 @@ function StructureEditor({ bom, onRows, purchased, onPurchase }) {
    - Optional export folder via File System Access API (Chrome/Edge);
      falls back to normal downloads elsewhere.
    ===================================================================== */
-async function svgsToPngs(rootEl) {
-    const clones = rootEl.cloneNode(true);
-    const liveSvgs = rootEl.querySelectorAll("svg");
-    const cloneSvgs = clones.querySelectorAll("svg");
-    for (let i = 0; i < liveSvgs.length; i++) {
-        try {
-            const svg = liveSvgs[i];
-            const xml = new XMLSerializer().serializeToString(svg);
-            const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(xml);
-            const img = new Image();
-            await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
-            const r = svg.getBoundingClientRect();
-            const scale = 2;
-            const cv = document.createElement("canvas");
-            cv.width = Math.max(50, r.width * scale);
-            cv.height = Math.max(30, r.height * scale);
-            const ctx = cv.getContext("2d");
-            ctx.fillStyle = "#fff";
-            ctx.fillRect(0, 0, cv.width, cv.height);
-            ctx.drawImage(img, 0, 0, cv.width, cv.height);
-            const png = document.createElement("img");
-            png.src = cv.toDataURL("image/png");
-            png.style.width = r.width + "px";
-            png.style.height = r.height + "px";
-            cloneSvgs[i].replaceWith(png);
-        }
-        catch (e) { /* keep svg on failure */ }
-    }
-    return clones;
+async function ensureDocx() {
+    if (typeof window === "undefined")
+        throw new Error("No browser environment.");
+    if (window.docx)
+        return window.docx;
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/docx/8.5.0/docx.js");
+    if (!window.docx)
+        throw new Error("docx library did not initialize.");
+    return window.docx;
 }
-function wordWrap(bodyHtml, title) {
-    return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-<head><meta charset="utf-8"><title>${title}</title>
-<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
-<style>
-  @page { size: 8.5in 11in; margin: 0.6in; }
-  body { font-family: "Segoe UI", Calibri, Arial, sans-serif; font-size: 10pt; }
-  table { border-collapse: collapse; }
-  td, th { border: 1px solid #999; padding: 3pt 5pt; font-size: 9pt; }
-</style></head><body>${bodyHtml}</body></html>`;
+/* rasterize an SVG element to a PNG data-url + pixel dims (for embedding in docx) */
+async function svgToPngData(svg) {
+    const xml = new XMLSerializer().serializeToString(svg);
+    const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(xml);
+    const img = new Image();
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+    const r = svg.getBoundingClientRect();
+    const scale = 2, w = Math.max(60, Math.round(r.width)), h = Math.max(30, Math.round(r.height));
+    const cv = document.createElement("canvas");
+    cv.width = w * scale;
+    cv.height = h * scale;
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.drawImage(img, 0, 0, cv.width, cv.height);
+    return { dataUrl: cv.toDataURL("image/png"), w, h };
+}
+function dataUrlToUint8(dataUrl) {
+    const b64 = dataUrl.split(",")[1];
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++)
+        arr[i] = bin.charCodeAt(i);
+    return arr;
+}
+const rgb = c => { const m = (c || "").match(/rg.*?\((\d+)[,\s]+(\d+)[,\s]+(\d+)/); if (!m)
+    return null; return ((+m[1]) << 16 | (+m[2]) << 8 | (+m[3])).toString(16).padStart(6, "0"); };
+/* Convert the rendered document DOM into a real .docx (tables preserved, drawings embedded) */
+async function domToDocx(rootEl, title, landscape) {
+    const D = await ensureDocx();
+    // pre-rasterize all svgs
+    const svgMap = new Map();
+    const svgs = [...rootEl.querySelectorAll("svg")];
+    for (const s of svgs) {
+        try {
+            svgMap.set(s, await svgToPngData(s));
+        }
+        catch (e) { }
+    }
+    const children = [];
+    const runsFromEl = el => {
+        // collect text with basic bold/color from inline styles
+        const runs = [];
+        const walk = (node, inherited) => {
+            if (node.nodeType === 3) {
+                const t = node.textContent.replace(/\s+/g, " ");
+                if (t.trim())
+                    runs.push(new D.TextRun({ text: t, bold: inherited.bold, color: inherited.color, size: inherited.size, highlight: inherited.hl }));
+                return;
+            }
+            if (node.nodeType !== 1)
+                return;
+            const st = node.getAttribute && node.getAttribute("style") || "";
+            const cs = window.getComputedStyle(node);
+            const bold = inherited.bold || /font-weight:\s*(bold|[6-9]00)/.test(st) || +cs.fontWeight >= 600;
+            const col = rgb(cs.color) || inherited.color;
+            const hl = /background(-color)?:\s*#?FFF200|background(-color)?:\s*rgb\(255,\s*242,\s*0/i.test(st) ? "yellow" : inherited.hl;
+            const next = { bold, color: col, size: inherited.size, hl };
+            node.childNodes.forEach(c => walk(c, next));
+        };
+        el.childNodes.forEach(c => walk(c, { bold: false, color: undefined, size: 18, hl: undefined }));
+        return runs;
+    };
+    const tableToDocx = tbl => {
+        const rows = [...tbl.rows].map(tr => {
+            const cells = [...tr.cells].map(tc => {
+                const cs = window.getComputedStyle(tc);
+                const shade = rgb(cs.backgroundColor);
+                return new D.TableCell({
+                    shading: shade && shade !== "ffffff" ? { fill: shade } : undefined,
+                    margins: { top: 40, bottom: 40, left: 60, right: 60 },
+                    children: [new D.Paragraph({ children: runsFromEl(tc).length ? runsFromEl(tc) : [new D.TextRun("")] })],
+                });
+            });
+            return new D.TableRow({ children: cells });
+        });
+        return new D.Table({ width: { size: 100, type: D.WidthType.PERCENTAGE }, rows });
+    };
+    // walk top-level blocks of each "Sheet" div in order
+    const sheets = rootEl.children.length ? [...rootEl.children] : [rootEl];
+    sheets.forEach((sheet, si) => {
+        if (si > 0)
+            children.push(new D.Paragraph({ children: [new D.PageBreak()] }));
+        const walkBlock = el => {
+            for (const node of el.children) {
+                const tag = node.tagName;
+                if (tag === "TABLE") {
+                    children.push(tableToDocx(node));
+                    children.push(new D.Paragraph({ text: "" }));
+                    continue;
+                }
+                const svg = node.tagName === "SVG" ? node : node.querySelector && node.querySelector("svg");
+                if (svg && svgMap.has(svg)) {
+                    const im = svgMap.get(svg);
+                    const maxW = landscape ? 900 : 640;
+                    const w = Math.min(maxW, im.w);
+                    const h = im.h * (w / im.w);
+                    children.push(new D.Paragraph({ alignment: D.AlignmentType.CENTER, children: [new D.ImageRun({ data: dataUrlToUint8(im.dataUrl), transformation: { width: w, height: h } })] }));
+                    continue;
+                }
+                if (node.querySelector && (node.querySelector("table") || node.querySelector("svg"))) {
+                    walkBlock(node);
+                    continue;
+                }
+                const runs = runsFromEl(node);
+                if (runs.length) {
+                    const cs = window.getComputedStyle(node);
+                    const big = parseFloat(cs.fontSize) >= 15 || +cs.fontWeight >= 700;
+                    children.push(new D.Paragraph({ spacing: { after: 60 }, children: runs, heading: big && node.textContent.length < 70 ? D.HeadingLevel.HEADING_3 : undefined }));
+                }
+            }
+        };
+        walkBlock(sheet);
+    });
+    const doc = new D.Document({
+        sections: [{
+                properties: { page: { size: landscape ? { orientation: D.PageOrientation.LANDSCAPE, width: 15840, height: 12240 } : { width: 12240, height: 15840 }, margin: { top: 720, bottom: 720, left: 720, right: 720 } } },
+                children,
+            }],
+    });
+    return await D.Packer.toBlob(doc);
 }
 let EXPORT_DIR = null; // FileSystemDirectoryHandle when user picks a folder
 async function pickExportFolder() {
@@ -2797,10 +3007,19 @@ async function saveOut(filename, blob) {
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     return "download";
 }
-async function exportPaneAsWord(paneEl, filename) {
-    const clone = await svgsToPngs(paneEl);
-    const blob = new Blob(["\ufeff" + wordWrap(clone.innerHTML, filename)], { type: "application/msword" });
-    return saveOut(filename.endsWith(".doc") ? filename : filename + ".doc", blob);
+async function exportPaneAsWord(paneEl, filename, landscape) {
+    try {
+        const blob = await domToDocx(paneEl, filename, landscape);
+        return saveOut(filename.endsWith(".docx") ? filename : filename + ".docx", blob);
+    }
+    catch (e) {
+        // offline / CDN blocked: fall back to a Word-openable HTML with inline table styles
+        const clone = paneEl.cloneNode(true);
+        clone.querySelectorAll("svg").forEach(s => { const note = document.createElement("div"); note.textContent = "[ drawing — view in app or PDF ]"; note.style.cssText = "border:1px dashed #999;padding:10px;text-align:center;color:#888"; s.replaceWith(note); });
+        const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><style>@page{size:${landscape ? "17in 11in" : "8.5in 11in"};margin:.6in}body{font-family:Segoe UI,Calibri,Arial;font-size:10pt}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:3pt 5pt;font-size:9pt;vertical-align:top}</style></head><body>${clone.innerHTML}</body></html>`;
+        const where = await saveOut(filename.replace(/\.docx$/, "") + ".doc", new Blob(["\ufeff" + html], { type: "application/msword" }));
+        return where;
+    }
 }
 function exportTableAsXlsx(paneEl, filename) {
     const tables = paneEl.querySelectorAll("table");
@@ -2902,12 +3121,44 @@ function DocWorks() {
     const [tab, setTab] = useState("tree");
     const [generated, setGenerated] = useState(null);
     const [purchased, setPurchased] = useState({}); // pn -> true (user marked "purchased, no BOM expected")
-    const [profile, setProfile] = useState("ez"); // output profile: ez | island
-    const [sheetSize, setSheetSize] = useState("letter"); // letter (multi-sheet) | tabloid (11x17 one sheet)
+    const [profile, setProfile] = useState("island"); // output profile: ez | island
+    const [sheetSize, setSheetSize] = useState("tabloid"); // letter (multi-sheet) | tabloid (11x17 one sheet)
     const [editMode, setEditMode] = useState(false);
     const [exportDirName, setExportDirName] = useState("");
     const [exportMsg, setExportMsg] = useState("");
     const docsRef = useRef(null);
+    // table row editing in edit mode: right-click a row -> insert/duplicate/delete
+    useEffect(() => {
+        if (!editMode)
+            return;
+        const root = docsRef.current;
+        if (!root)
+            return;
+        const onCtx = e => {
+            const tr = e.target.closest && e.target.closest("tr");
+            if (!tr || !root.contains(tr))
+                return;
+            e.preventDefault();
+            const tbody = tr.parentNode;
+            const menu = document.createElement("div");
+            menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;z-index:9999;background:#fff;border:1px solid #999;box-shadow:0 3px 12px rgba(0,0,0,.2);font:12px Segoe UI,Arial;border-radius:3px;overflow:hidden`;
+            const mk = (label, fn) => { const b = document.createElement("div"); b.textContent = label; b.style.cssText = "padding:7px 14px;cursor:pointer;white-space:nowrap"; b.onmouseenter = () => b.style.background = "#EEF"; b.onmouseleave = () => b.style.background = "#fff"; b.onclick = () => { fn(); document.body.removeChild(menu); }; menu.appendChild(b); };
+            mk("Insert row above", () => { const c = tr.cloneNode(true); c.querySelectorAll("td,th").forEach(td => { if (!/^(Op|Step|\d+)/.test(td.textContent))
+                td.textContent = ""; }); tbody.insertBefore(c, tr); });
+            mk("Insert row below", () => { const c = tr.cloneNode(true); c.querySelectorAll("td,th").forEach(td => { td.textContent = ""; }); tbody.insertBefore(c, tr.nextSibling); });
+            mk("Duplicate row", () => { tbody.insertBefore(tr.cloneNode(true), tr.nextSibling); });
+            mk("Delete row", () => { tbody.removeChild(tr); });
+            document.body.appendChild(menu);
+            const close = ev => { if (!menu.contains(ev.target)) {
+                if (menu.parentNode)
+                    document.body.removeChild(menu);
+                document.removeEventListener("mousedown", close);
+            } };
+            setTimeout(() => document.addEventListener("mousedown", close), 0);
+        };
+        root.addEventListener("contextmenu", onCtx);
+        return () => root.removeEventListener("contextmenu", onCtx);
+    }, [editMode]);
     const [espByPn, setEspByPn] = useState({}); // Island: per-assembly ESP number overrides
     const custDet = useMemo(() => detectCustomer(bom), [bom]);
     const [customerOverride, setCustomerOverride] = useState("");
@@ -2973,7 +3224,7 @@ function DocWorks() {
                 "DOC",
                 React.createElement("span", { style: { color: "#F2C14E" } }, "WORKS")),
             React.createElement("div", { style: { opacity: .75, fontSize: 11.5, borderLeft: "1px solid rgba(255,255,255,.3)", paddingLeft: 14 } }, "BOM / drawing import \u2192 Family Tree \u00B7 Parts List \u00B7 Traveler \u00B7 Work Instruction | 100% local"),
-            React.createElement("div", { style: { marginLeft: "auto", fontSize: 10.5, opacity: .65, fontFamily: MONO } }, "v0.13 PROTOTYPE")),
+            React.createElement("div", { style: { marginLeft: "auto", fontSize: 10.5, opacity: .65, fontFamily: MONO } }, "v0.15 PROTOTYPE")),
         React.createElement("div", { style: { display: "flex", flex: 1, minHeight: 0, flexWrap: "wrap" } },
             React.createElement("div", { style: { width: 400, minWidth: 310, flexShrink: 0, background: C.paper, borderRight: `1px solid ${C.line}`, padding: 16, overflowY: "auto", maxHeight: "calc(100vh - 46px)" } },
                 React.createElement("div", { style: { marginBottom: 18 } },
@@ -3178,17 +3429,17 @@ function DocWorks() {
                         opacity: generated ? 1 : .45,
                     } }, label)))),
                 generated && (React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center", padding: "6px 16px", borderBottom: `1px solid ${C.line}`, background: "#FCFCFA", flexWrap: "wrap" } },
-                    React.createElement("button", { onClick: () => setEditMode(v => !v), style: { border: `1px solid ${editMode ? "#B8860B" : C.navy}`, background: editMode ? "#FFF6DC" : "#fff", color: editMode ? "#8A6D00" : C.navy, padding: "4px 10px", fontSize: 11, fontWeight: 700, borderRadius: 2, cursor: "pointer" } }, editMode ? "✎ Editing ON — click any text" : "✎ Edit documents"),
+                    React.createElement("button", { onClick: () => setEditMode(v => !v), style: { border: `1px solid ${editMode ? "#B8860B" : C.navy}`, background: editMode ? "#FFF6DC" : "#fff", color: editMode ? "#8A6D00" : C.navy, padding: "4px 10px", fontSize: 11, fontWeight: 700, borderRadius: 2, cursor: "pointer" } }, editMode ? "✎ Editing ON — click text · right-click rows" : "✎ Edit documents"),
                     React.createElement("button", { onClick: async () => { try {
                             setExportMsg("Exporting…");
                             const names = { tree: "Family_Tree", plist: "Parts_List", trav: "Travelers", wi: profile === "island" ? "ESP_Procedures" : "Work_Instructions" };
-                            const where = await exportPaneAsWord(docsRef.current, "DocWorks_" + names[tab] + "_" + (generated.tops || []).join("+"));
+                            const where = await exportPaneAsWord(docsRef.current, "DocWorks_" + names[tab] + "_" + (generated.tops || []).join("+"), tab === "tree" && sheetSize === "tabloid");
                             setExportMsg(where === "folder" ? "Saved to folder ✓" : "Downloaded ✓");
                             setTimeout(() => setExportMsg(""), 3500);
                         }
                         catch (e) {
                             setExportMsg("Export failed: " + e.message);
-                        } }, style: { border: `1px solid ${C.navy}`, background: "#fff", color: C.navy, padding: "4px 10px", fontSize: 11, fontWeight: 600, borderRadius: 2, cursor: "pointer" } }, "\u2B07 Export Word (.doc)"),
+                        } }, style: { border: `1px solid ${C.navy}`, background: "#fff", color: C.navy, padding: "4px 10px", fontSize: 11, fontWeight: 600, borderRadius: 2, cursor: "pointer" } }, "\u2B07 Export Word (.docx)"),
                     tab === "plist" && (React.createElement("button", { onClick: async () => { try {
                             const where = await exportTableAsXlsx(docsRef.current, "DocWorks_Parts_List_" + (generated.tops || []).join("+"));
                             setExportMsg(where === "folder" ? "Saved to folder ✓" : "Downloaded ✓");
@@ -3214,13 +3465,13 @@ function DocWorks() {
                         [["letter", "Letter (multi-sheet)"], ["tabloid", "11×17 (one sheet)"]].map(([id, lbl]) => (React.createElement("button", { key: id, onClick: () => setSheetSize(id), style: { border: `1px solid ${sheetSize === id ? C.navy : C.line}`, background: sheetSize === id ? C.navy : "#fff", color: sheetSize === id ? "#fff" : "#555", padding: "3px 8px", fontSize: 10.5, fontWeight: sheetSize === id ? 700 : 400, borderRadius: 2, cursor: "pointer" } }, lbl))))),
                     editMode && React.createElement("span", { style: { fontSize: 10, color: "#8A6D00" } }, "Edits persist until you regenerate \u2014 exports capture your edits."),
                     exportMsg && React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: exportMsg.includes("failed") || exportMsg.includes("needs") ? "#B03A00" : "#2E6B3E" } }, exportMsg))),
-                React.createElement("div", { ref: docsRef, contentEditable: editMode, suppressContentEditableWarning: true, style: { overflowY: "auto", padding: 22, display: "flex", flexDirection: "column", alignItems: "center", gap: 22, flex: 1, outline: editMode ? "2px dashed #B8860B" : "none", outlineOffset: -4 } },
+                React.createElement("div", { style: { overflowY: "auto", padding: 22, display: "flex", flexDirection: "column", alignItems: "center", gap: 14, flex: 1 } },
                     !generated && (React.createElement("div", { style: { color: "#999", textAlign: "center", padding: "80px 20px", fontSize: 13 } },
                         React.createElement("div", { style: { fontSize: 38, marginBottom: 10, opacity: .4 } }, "\u2B21"),
                         "Drop a BOM (Excel/CSV), paste from a PDF, or use the sample.",
                         React.createElement("br", null),
                         "Then choose what you're building and generate.")),
-                    generated && check && (React.createElement("div", { style: { marginBottom: 12 } }, check.pass && !check.warns.length && !check.info.length ? (React.createElement("div", { style: { background: "#EAF6EC", border: "1px solid #2E6B3E55", color: "#2E6B3E", padding: "8px 12px", fontSize: 12, fontWeight: 600 } }, "\u2713 Document check passed \u2014 routing sequence, hold points, and BOM references verified.")) : (React.createElement("div", { style: { border: `1px solid ${C.line}`, background: "#fff", padding: "8px 12px", fontSize: 11.5 } },
+                    generated && check && (React.createElement("div", { style: { marginBottom: 4, width: "100%", maxWidth: 850 } }, check.pass && !check.warns.length && !check.info.length ? (React.createElement("div", { style: { background: "#EAF6EC", border: "1px solid #2E6B3E55", color: "#2E6B3E", padding: "8px 12px", fontSize: 12, fontWeight: 600 } }, "\u2713 Document check passed \u2014 routing sequence, hold points, and BOM references verified.")) : (React.createElement("div", { style: { border: `1px solid ${C.line}`, background: "#fff", padding: "8px 12px", fontSize: 11.5 } },
                         React.createElement("b", { style: { fontSize: 11, letterSpacing: ".05em", color: check.errors.length ? "#B03A00" : "#8A6D00" } },
                             "DOCUMENT CHECK \u2014 ",
                             check.errors.length,
@@ -3228,7 +3479,8 @@ function DocWorks() {
                             check.warns.length,
                             " warning(s), ",
                             check.info.length,
-                            " note(s)"),
+                            " note(s) \u00B7 ",
+                            React.createElement("span", { style: { fontWeight: 400, color: "#999" } }, "not included in exports")),
                         check.errors.map((x, i) => React.createElement("div", { key: "e" + i, style: { color: "#B03A00", marginTop: 3 } },
                             "\u2715 ",
                             x)),
@@ -3238,10 +3490,11 @@ function DocWorks() {
                         check.info.map((x, i) => React.createElement("div", { key: "i" + i, style: { color: "#666", marginTop: 3 } },
                             "\u00B7 ",
                             x)))))),
-                    generated && tab === "tree" && React.createElement(TreeDoc, { bom: bom, excluded: generated.excluded, tops: generated.tops, cfgName: generated.cfgName, m: m, purchased: generated.purchased || {}, profile: profile, customer: customer, sheetSize: sheetSize }),
-                    generated && tab === "plist" && React.createElement(PartsListDoc, { bom: bom, excluded: generated.excluded, tops: generated.tops, cfgName: generated.cfgName, m: m, purchased: generated.purchased || {}, profile: profile, customer: customer }),
-                    generated && tab === "trav" && React.createElement(TravelerDocs, { bom: bom, excluded: generated.excluded, tops: generated.tops, m: m, profile: profile, espByPn: espByPn, customer: customer }),
-                    generated && tab === "wi" && React.createElement(WIDocs, { bom: bom, excluded: generated.excluded, tops: generated.tops, m: m, profile: profile, espByPn: espByPn, customer: customer }))))));
+                    React.createElement("div", { ref: docsRef, contentEditable: editMode, suppressContentEditableWarning: true, style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 22, width: "100%", outline: editMode ? "2px dashed #B8860B" : "none", outlineOffset: 4, borderRadius: editMode ? 4 : 0 } },
+                        generated && tab === "tree" && React.createElement(TreeDoc, { bom: bom, excluded: generated.excluded, tops: generated.tops, cfgName: generated.cfgName, m: m, purchased: generated.purchased || {}, profile: profile, customer: customer, sheetSize: sheetSize }),
+                        generated && tab === "plist" && React.createElement(PartsListDoc, { bom: bom, excluded: generated.excluded, tops: generated.tops, cfgName: generated.cfgName, m: m, purchased: generated.purchased || {}, profile: profile, customer: customer }),
+                        generated && tab === "trav" && React.createElement(TravelerDocs, { bom: bom, excluded: generated.excluded, tops: generated.tops, m: m, profile: profile, espByPn: espByPn, customer: customer }),
+                        generated && tab === "wi" && React.createElement(WIDocs, { bom: bom, excluded: generated.excluded, tops: generated.tops, m: m, profile: profile, espByPn: espByPn, customer: customer })))))));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(DocWorks, null));
 
