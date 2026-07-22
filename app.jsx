@@ -1075,7 +1075,7 @@ function DocHeader({ title, docNo, pn, extra, m, company }) {
   );
 }
 function Sheet({ children, wide }) {
-  return <div style={{ background: "#fff", width: "100%", maxWidth: wide ? 1360 : 850, boxShadow: "0 2px 14px rgba(0,0,0,.13)", padding: wide ? "24px 28px" : "30px 34px", fontSize: 12.5, lineHeight: 1.45 }}>{children}</div>;
+  return <div className="dw-sheet" style={{ background: "#fff", width: "100%", maxWidth: wide ? 1360 : 850, boxShadow: "0 2px 14px rgba(0,0,0,.13)", padding: wide ? "24px 28px" : "30px 34px", fontSize: 12.5, lineHeight: 1.45, boxSizing: "border-box" }}>{children}</div>;
 }
 function H3({ children }) { return <h3 style={{ fontSize: 13, color: C.navy, letterSpacing: ".04em", margin: "16px 0 8px", fontWeight: 700 }}>{children}</h3>; }
 function Intro({ children }) { return <p style={{ fontSize: 11.5, color: "#666", fontStyle: "italic", marginBottom: 10 }}>{children}</p>; }
@@ -1107,7 +1107,7 @@ const MAXH_SUB = 560;       // px; sub-sheets have more room
 // SHEET SIZES: "letter" = readable multi-sheet set; "tabloid" = one 11x17 sheet, compact
 const SHEET_SIZES = {
   letter:  { NW: 118, NH: 60, GX: 12, ROWH: 116, descLines: 3, descChars: 19, fontPN: 11, MAXW: 980, usableW: 984, oneSheet: false },
-  tabloid: { NW: 120, NH: 52, GX: 30, ROWH: 96,  descLines: 1, descChars: 22, fontPN: 11, MAXW: 100000, usableW: 1540, oneSheet: true, bulletLeaves: true, bulletW: 250, bulletLH: 13, VGAP: 34 },
+  tabloid: { NW: 118, NH: 50, GX: 30, ROWH: 96,  descLines: 2, descChars: 20, fontPN: 10.5, MAXW: 100000, usableW: 1540, oneSheet: true, bulletLeaves: true, bulletLH: 12, VGAP: 40, laneGap: 26, compChars: 40, bulletFont: 9 },
 };
 function sheetDims(sizeId) { return SHEET_SIZES[sizeId] || SHEET_SIZES.letter; }
 
@@ -1116,12 +1116,15 @@ function sheetDims(sizeId) { return SHEET_SIZES[sizeId] || SHEET_SIZES.letter; }
    Sub-assemblies branch as sibling boxes. Vertical placement is dynamic (a node's
    children start below the node's box + its bullet list). Used for the 11x17 sheet. */
 function layoutBulletTree(bom, excluded, top, D) {
-  // Components sit in a RIGHT-HAND column beside the assembly box (not below it),
-  // so the sub-assembly connector can exit the box bottom cleanly without crossing
-  // the component list. Each node occupies a block = [box | components column].
-  const NW = D.NW, NH = D.NH, GX = D.GX, BW = D.bulletW || 250, BLH = D.bulletLH || 13, VGAP = D.VGAP || 34;
-  const COLGAP = 10;        // gap between box and its component column
-  const BOXGAP = 34;        // gap between sibling assembly blocks
+  // ICG house style: each assembly is a box with its component list hanging BELOW it
+  // (indented bullets). Each assembly owns a vertical "lane" as wide as the widest of
+  // its box or its component text. Siblings are spaced by full lane width so component
+  // lists never collide. The parent connector branches ABOVE the row of child boxes
+  // and reaches each child box's TOP center — it never crosses a component list.
+  const NW = D.NW, NH = D.NH, BLH = D.bulletLH || 13, VGAP = D.VGAP || 34;
+  const LANEGAP = D.laneGap || 20;      // horizontal gap between sibling lanes
+  const compChars = D.compChars || 46;  // max chars shown per component line
+  const CHARW = (D.bulletFont || 9.5) * 0.60;  // approx mono/arial char width at bullet font
   function build(pn, row, depth, seen) {
     const cyc = seen.has(pn);
     const kidRows = cyc ? [] : (bom.children[pn] || []).filter(k => !excluded[k.pn]);
@@ -1132,42 +1135,55 @@ function layoutBulletTree(bom, excluded, top, D) {
     return { pn, row, depth, part: bom.parts[pn] || { pn, desc: "", rev: "-", mb: "" }, kids, asmK, leafK };
   }
   const root = build(top, null, 0, new Set());
-  // blockW = box + (component column to the right, if any)
+  // estimate the pixel width a component list needs (longest line)
+  const compTextW = n => {
+    if (!n.leafK.length) return 0;
+    let mx = 0;
+    for (const k of n.leafK) {
+      const desc = String(k.part.desc || "").slice(0, compChars);
+      const qty = k.row ? k.row.qty : "1";
+      const len = (k.pn + "  " + desc + "  (" + qty + ")").length;
+      mx = Math.max(mx, len);
+    }
+    return 16 + mx * CHARW; // 16 = indent + rail
+  };
+  // laneW = max(box width, component text width). subtree width = max(own lane, children row)
   function width(n) {
     n.hasBullets = n.leafK.length > 0;
-    n.compW = n.hasBullets ? BW : 0;
-    n.blockW = NW + (n.hasBullets ? COLGAP + n.compW : 0);
+    n.compW = compTextW(n);
+    n.laneW = Math.max(NW, n.compW);
     n.asmK.forEach(width);
-    const childrenW = n.asmK.reduce((s, k) => s + k.blockW, 0) + BOXGAP * Math.max(0, n.asmK.length - 1);
-    n.w = Math.max(n.blockW, childrenW);
+    const childrenW = n.asmK.reduce((s, k) => s + k.w, 0) + LANEGAP * Math.max(0, n.asmK.length - 1);
+    n.w = Math.max(n.laneW, childrenW);
     return n.w;
   }
   width(root);
-  // block height = max(box height, component column height)
-  const compH = n => n.hasBullets ? (n.leafK.length * BLH + 8) : 0;
+  const compH = n => n.hasBullets ? (n.leafK.length * BLH + 10) : 0;
+  // place: box sits at the LEFT of its lane (so its component list, also left-aligned,
+  // stays within the lane). Parent box centers over the span of child box centers.
   function placeX(n, x) {
-    // n.boxX = left edge of the assembly box; box sits at the left of the block
-    if (!n.asmK.length) { n.boxX = x + (n.w - n.blockW) / 2; n.x = n.boxX + NW / 2; return; }
-    const childrenW = n.asmK.reduce((s, k) => s + k.blockW, 0) + BOXGAP * Math.max(0, n.asmK.length - 1);
+    n.laneX = x + Math.max(0, (n.w - n.laneW) / 2); // lane centered in subtree span
+    if (!n.asmK.length) { n.boxX = n.laneX; n.x = n.boxX + NW / 2; return; }
+    const childrenW = n.asmK.reduce((s, k) => s + k.w, 0) + LANEGAP * Math.max(0, n.asmK.length - 1);
     let cx = x + Math.max(0, (n.w - childrenW) / 2);
-    n.asmK.forEach(k => { placeX(k, cx); cx += k.blockW + BOXGAP; });
-    // parent box centers over the span of child BOXES (not their component columns)
-    const boxCenters = n.asmK.map(k => k.x);
-    const mid = (Math.min(...boxCenters) + Math.max(...boxCenters)) / 2;
+    n.asmK.forEach(k => { placeX(k, cx); cx += k.w + LANEGAP; });
+    const centers = n.asmK.map(k => k.x);
+    const mid = (Math.min(...centers) + Math.max(...centers)) / 2;
     n.boxX = mid - NW / 2;
     n.x = mid;
+    // keep box within its own lane if it's the only positioning constraint
   }
   placeX(root, 0);
   let maxY = 0;
   (function placeY(n, topY) {
     n.y = topY;
-    n.blockH = Math.max(NH, compH(n));
+    n.blockH = NH + compH(n);
     const below = topY + n.blockH;
     maxY = Math.max(maxY, below);
     if (n.asmK.length) { const ct = below + VGAP; n.asmK.forEach(k => placeY(k, ct)); }
   })(root, 0);
   const flat = []; (function w(n) { flat.push(n); n.asmK.forEach(w); })(root);
-  return { root, flat, totalW: root.w, totalH: maxY, bullet: true, rightColumn: true };
+  return { root, flat, totalW: root.w, totalH: maxY, bullet: true };
 }
 
 function layoutTree2(bom, excluded, top, collapse, stackMode, D) {
@@ -1292,12 +1308,11 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
 
   // ---- BULLET LAYOUT RENDER (ICG house style) ----
   if (L.bullet) {
-    const BLH = D.bulletLH || 13, BW = D.bulletW || 250, COLGAP = 10;
-    const FONT = '"Arial","Helvetica",sans-serif'; // bolder, more legible than mono for the tree
+    const BLH = D.bulletLH || 13;
+    const FONT = '"Arial","Helvetica",sans-serif';
     const bels = [];
     const truncate = (s, nchar) => { s = String(s || "").toUpperCase(); return s.length > nchar ? s.slice(0, nchar - 1) + "…" : s; };
-    // component-label char budget derived from column width (so nothing clips off the side)
-    const compChars = Math.max(24, Math.floor((BW - 14) / 5.4));
+    const compChars = D.compChars || 46;
     for (const n of L.flat) {
       const bx0 = PADX + (n.boxX != null ? n.boxX : n.x - NW / 2), ny = PADY + n.y;
       const isTop = n.depth === 0;
@@ -1306,36 +1321,40 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
       const key = n.pn + "_" + n.depth + "_" + Math.round(n.x);
       // assembly box
       bels.push(<rect key={"b" + key} x={bx0} y={ny} width={NW} height={NH} rx={3}
+        data-pn={n.pn} className={sheet.editable ? "dw-draggable" : undefined}
         fill={missing ? "#FFF9E8" : isTop ? "#EEF3FB" : "#fff"} stroke={missing ? "#B8860B" : isTop ? C.navy : C.navy2}
-        strokeWidth={isTop ? 2.2 : 1.5} strokeDasharray={missing ? "5 3" : "none"} />);
+        strokeWidth={isTop ? 2.2 : 1.5} strokeDasharray={missing ? "5 3" : "none"}
+        style={sheet.editable ? { cursor: "grab" } : undefined} />);
       bels.push(<text key={"p" + key} x={bx0 + NW / 2} y={ny + 15} textAnchor="middle" fontFamily={FONT} fontSize={fPN} fontWeight={800} fill={isTop ? C.navy : C.navy2}>{n.pn}</text>);
       wrapText(n.part.desc, dChars, 2).forEach((l, li) => bels.push(<text key={"d" + key + li} x={bx0 + NW / 2} y={ny + 26 + li * 9} textAnchor="middle" fontFamily={FONT} fontSize={fD} fontWeight={600} fill="#333">{l}</text>));
       bels.push(<text key={"q" + key} x={bx0 + NW / 2} y={ny + NH - 5} textAnchor="middle" fontFamily={FONT} fontSize={fQ} fontWeight={700} fill="#111">{"QTY: " + (n.row ? n.row.qty : "1")}</text>);
       if (missing) bels.push(<text key={"m" + key} x={bx0 + NW / 2} y={ny + NH + 9} textAnchor="middle" fontFamily={FONT} fontSize={7} fontWeight={700} fill="#B8860B">▲ NO BOM</text>);
       if (isPurch) bels.push(<text key={"u" + key} x={bx0 + NW / 2} y={ny + NH + 9} textAnchor="middle" fontFamily={FONT} fontSize={7} fontWeight={700} fill="#666">(PURCHASED)</text>);
-      // component list to the RIGHT of the box (right-hand column)
+      // component list BELOW the box (left-aligned within this assembly's lane)
       if (n.hasBullets) {
-        const colX = bx0 + NW + COLGAP;
-        const by = ny + 2;
-        // connector: from box right-mid to the column
-        const midY = ny + NH / 2;
-        bels.push(<line key={"cc" + key} x1={bx0 + NW} y1={midY} x2={colX - 3} y2={midY} stroke="#999" strokeWidth={1} />);
-        // vertical rail down the column
-        bels.push(<line key={"rail" + key} x1={colX} y1={by} x2={colX} y2={by + n.leafK.length * BLH} stroke="#bbb" strokeWidth={.8} />);
+        const railX = bx0 + 3, by = ny + NH + 6;
+        bels.push(<line key={"rail" + key} x1={railX} y1={by - 1} x2={railX} y2={by + n.leafK.length * BLH - 3} stroke="#bbb" strokeWidth={.8} />);
         n.leafK.forEach((k, i) => {
-          const ly = by + i * BLH + 9;
-          bels.push(<line key={"bl" + key + i} x1={colX} y1={ly - 3} x2={colX + 5} y2={ly - 3} stroke="#bbb" strokeWidth={.8} />);
+          const ly = by + i * BLH + 8;
+          bels.push(<line key={"bl" + key + i} x1={railX} y1={ly - 3} x2={railX + 5} y2={ly - 3} stroke="#bbb" strokeWidth={.8} />);
           const qty = k.row ? k.row.qty : "1";
           const label = k.pn + "  " + truncate(k.part.desc, compChars) + "  (" + qty + ")";
           const km = !k.kids.length && isAssemblyLike(k.part) && !purchased[k.pn];
-          bels.push(<text key={"bt" + key + i} x={colX + 9} y={ly} fontFamily={FONT} fontSize={fBullet} fontWeight={500} fill={km ? "#B8860B" : "#1A1A1E"}>{label}{km ? " ▲" : ""}</text>);
+          bels.push(<text key={"bt" + key + i} x={railX + 9} y={ly} fontFamily={FONT} fontSize={fBullet} fontWeight={500} fill={km ? "#B8860B" : "#1A1A1E"}>{label}{km ? " ▲" : ""}</text>);
         });
       }
-      // connector to sub-assemblies: exits the BOX BOTTOM (clean, no list crossing)
+      // connector to sub-assemblies: bus sits in the VGAP between this block's bottom and
+      // the child boxes' tops; reaches each child box TOP center. Never crosses a list.
       if (n.asmK && n.asmK.length) {
-        const busY = ny + NH + (D.VGAP || 34) / 2;
+        const childTopY = PADY + n.asmK[0].y;         // all children share the same top Y
+        const busY = childTopY - (D.VGAP || 40) / 2;   // bus just above the child boxes
+        const dropX = bx0 - 7;                          // drop down the LEFT edge of the lane, clear of the indented list
+        // short stub from box bottom-left to the drop line, then down to the bus
+        bels.push(<line key={"vs" + key} x1={bx0 + NW / 2} y1={ny + NH} x2={bx0 + NW / 2} y2={ny + NH + 6} stroke={C.navy} strokeWidth={1.2} />);
+        bels.push(<line key={"vsh" + key} x1={bx0 + NW / 2} y1={ny + NH + 6} x2={dropX} y2={ny + NH + 6} stroke={C.navy} strokeWidth={1.2} />);
+        bels.push(<line key={"v" + key} x1={dropX} y1={ny + NH + 6} x2={dropX} y2={busY} stroke={C.navy} strokeWidth={1.2} />);
+        bels.push(<line key={"vh" + key} x1={dropX} y1={busY} x2={bx0 + NW / 2} y2={busY} stroke={C.navy} strokeWidth={1.2} />);
         const px = bx0 + NW / 2;
-        bels.push(<line key={"v" + key} x1={px} y1={ny + NH} x2={px} y2={busY} stroke={C.navy} strokeWidth={1.2} />);
         const ends = [px];
         n.asmK.forEach(k => { const kpx = PADX + (k.boxX != null ? k.boxX + NW / 2 : k.x); ends.push(kpx); bels.push(<line key={"c" + key + k.pn} x1={kpx} y1={busY} x2={kpx} y2={PADY + k.y} stroke={C.navy} strokeWidth={1.2} />); });
         const x1 = Math.min(...ends), x2 = Math.max(...ends);
@@ -1399,14 +1418,78 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
   return { svg, W };
 }
 
-function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer, sheetSize }) {
+function DraggableSvg({ svg, W, H, editable, nudges, setNudges, fit, cap }) {
+  const ref = useRef(null);
+  const drag = useRef(null);
+  useEffect(() => {
+    if (!editable) return;
+    const host = ref.current; if (!host) return;
+    const svgEl = host.querySelector("svg"); if (!svgEl) return;
+    const toSvg = (clientX, clientY) => {
+      const r = svgEl.getBoundingClientRect();
+      const vb = svgEl.viewBox.baseVal;
+      const sx = vb.width / r.width, sy = vb.height / r.height;
+      return { x: (clientX - r.left) * sx, y: (clientY - r.top) * sy };
+    };
+    const onDown = e => {
+      const rect = e.target.closest(".dw-draggable"); if (!rect) return;
+      const pn = rect.getAttribute("data-pn"); if (!pn) return;
+      e.preventDefault();
+      const start = toSvg(e.clientX, e.clientY);
+      const cur = (nudges && nudges[pn]) || { dx: 0, dy: 0 };
+      drag.current = { pn, start, base: { ...cur }, rect };
+      rect.style.cursor = "grabbing";
+      // live-move overlay: translate the rect + its group visually while dragging
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    };
+    const onMove = e => {
+      if (!drag.current) return;
+      const p = toSvg(e.clientX, e.clientY);
+      const ddx = p.x - drag.current.start.x, ddy = p.y - drag.current.start.y;
+      drag.current.live = { dx: drag.current.base.dx + ddx, dy: drag.current.base.dy + ddy };
+      // live visual: translate the dragged box + its text siblings by the delta-from-drag-start
+      drag.current.rect.setAttribute("transform", `translate(${ddx},${ddy})`);
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      if (drag.current && drag.current.live) {
+        const { pn, live } = drag.current;
+        setNudges(prev => ({ ...(prev || {}), [pn]: { dx: live.dx, dy: live.dy } }));
+      }
+      if (drag.current && drag.current.rect) drag.current.rect.style.cursor = "grab";
+      drag.current = null;
+    };
+    host.addEventListener("pointerdown", onDown);
+    return () => { host.removeEventListener("pointerdown", onDown); window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
+  }, [editable, nudges, setNudges]);
+  return (
+    <div ref={ref} style={fit ? {} : { width: W, minWidth: W }}>
+      {svg}
+    </div>
+  );
+}
+function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer, sheetSize, editable, nudges, setNudges }) {
   const P = activeProfile(profile);
   const [fit, setFit] = useState(false); // false = actual readable size (scroll); true = fit to width
   const D = sheetDims(sheetSize || "letter");
   // sheet plan across all tops
   let allSheets = [];
   tops.forEach(t => { allSheets = allSheets.concat(planSheets(bom, excluded, t, undefined, D)); });
-  allSheets.forEach(s => { s.D = D; });
+  // apply manual position nudges (drag-to-reposition) to node coordinates before drawing
+  if (nudges) {
+    allSheets.forEach(s => {
+      (s.layout.flat || []).forEach(n => {
+        const nu = nudges[n.pn];
+        if (nu) {
+          if (n.boxX != null) n.boxX += nu.dx; n.x = (n.x || 0) + nu.dx; n.y = (n.y || 0) + nu.dy;
+          if (n.laneX != null) n.laneX += nu.dx;
+        }
+      });
+    });
+  }
+  allSheets.forEach(s => { s.D = D; s.editable = editable; s.nudges = nudges; s.setNudges = setNudges; });
   allSheets.forEach((s, i) => s.sheetNo = i + 1);
   const byTop = {}; allSheets.forEach(s => { if (byTop[s.top] === undefined) byTop[s.top] = s.sheetNo; });
   allSheets.forEach(s => { s.refs = {}; s.collapse.forEach(pn => { if (byTop[pn]) s.refs[pn] = byTop[pn]; }); });
@@ -1466,7 +1549,9 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer
               <span style={{ fontFamily: MONO, color: "#666" }}>{sh.sheetNo === 1 ? tops.join(" + ") : (shTop.desc || "").toUpperCase()}</span>
             </div>
             <div style={{ padding: 8, overflowX: fit ? "hidden" : "auto", display: "flex", justifyContent: "center" }}>
-              {fit ? d.svg : <div style={{ width: d.W, minWidth: d.W }}>{d.svg}</div>}
+              {editable
+                ? <DraggableSvg svg={d.svg} W={d.W} H={0} editable={editable} nudges={nudges} setNudges={setNudges} fit={fit} cap={D.usableW} />
+                : (fit ? d.svg : <div style={{ width: d.W, minWidth: d.W }}>{d.svg}</div>)}
             </div>
           </div>
         );
@@ -2690,16 +2775,22 @@ async function exportPaneAsPDF(paneEl, title, pageSize) {
   win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>
 <style>
   @page { size: ${sizeCSS}; margin: 0.4in; }
-  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
   body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; background: #fff; }
-  svg { max-width: none !important; }
+  /* each generated document (Sheet) fills the printable width and starts on its own page */
+  .dw-sheet { max-width: 100% !important; width: 100% !important; box-shadow: none !important; margin: 0 auto !important; padding: 0 !important; break-inside: avoid-page; }
+  .dw-sheet + .dw-sheet { break-before: page; page-break-before: always; }
+  /* tables must not overflow the page width */
+  table { width: 100% !important; max-width: 100% !important; table-layout: fixed; border-collapse: collapse; }
+  td, th { overflow-wrap: break-word; word-break: break-word; }
+  svg { max-width: 100% !important; height: auto !important; }
   @media print { .noprint { display: none !important; } }
   .barp { position: fixed; top: 0; left: 0; right: 0; background: #1F3864; color: #fff; padding: 10px 16px; font: 13px Segoe UI, Arial; z-index: 99; display: flex; gap: 12px; align-items: center; }
   .barp button { background: #fff; color: #1F3864; border: none; padding: 6px 14px; font-weight: 700; border-radius: 3px; cursor: pointer; }
   .content { margin-top: 0; }
-  @media screen { .content { margin-top: 52px; padding: 16px; } }
+  @media screen { .content { margin-top: 52px; padding: 16px; background: #eee; } .dw-sheet { margin-bottom: 16px !important; box-shadow: 0 2px 10px rgba(0,0,0,.15) !important; } }
 </style></head><body>
-<div class="barp noprint"><b>DocWorks — Print to PDF</b><button onclick="window.print()">🖨 Print / Save as PDF</button><span style="font-weight:400;font-size:12px">In the dialog choose "Save as PDF" as the destination${pageSize !== "letter" ? ' and set paper to <b>Tabloid / 11×17</b> ' + (pageSize.includes("landscape") ? "Landscape" : "Portrait") : ""}.</span></div>
+<div class="barp noprint"><b>DocWorks — Print to PDF</b><button onclick="window.print()">🖨 Print / Save as PDF</button><span style="font-weight:400;font-size:12px">Choose "Save as PDF" — each assembly document starts on its own page. Destination:${pageSize !== "letter" ? ' and set paper to <b>Tabloid / 11×17</b> ' + (pageSize.includes("landscape") ? "Landscape" : "Portrait") : ""}.</span></div>
 <div class="content">${html}</div>
 </body></html>`);
   win.document.close();
@@ -2749,14 +2840,14 @@ function DocWorks() {
   const projFileRef = useRef(null); const tplFileRef = useRef(null);
   const applyRows = rows => { setBom(buildBOM(rows, [])); setGenerated(null); setCheck(null); setSrcLabel(s => /\(edited\)$/.test(s) ? s : s + " (edited)"); };
   const download = (name, obj) => { const b = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 500); };
-  const exportProject = () => download("docworks_project.json", { version: "0.9", rows: bom.rows, srcLabel, activeCfg, excluded, purchased, meta: { wo, sn, prog, date, rev, eco, change, profile, espByPn, customer, sheetSize }, customTemplates: customDecls });
+  const exportProject = () => download("docworks_project.json", { version: "0.9", rows: bom.rows, srcLabel, activeCfg, excluded, purchased, meta: { wo, sn, prog, date, rev, eco, change, profile, espByPn, customer, sheetSize, treeNudges }, customTemplates: customDecls });
   const importProject = f => { const rd = new FileReader(); rd.onload = () => { try {
       const j = JSON.parse(rd.result);
       if (!Array.isArray(j.rows)) throw new Error("no rows[]");
       setCustomDecls(j.customTemplates || []); setCustomTemplates(j.customTemplates || []);
       setBom(buildBOM(j.rows, [])); setSrcLabel(j.srcLabel || f.name); setActiveCfg(j.activeCfg || "actuator");
       setExcluded(j.excluded || {}); setPurchased(j.purchased || {});
-      const mm = j.meta || {}; if (mm.profile) setProfile(mm.profile); if (mm.sheetSize) setSheetSize(mm.sheetSize); if (mm.espByPn) setEspByPn(mm.espByPn); if (mm.customer) setCustomerOverride(mm.customer); setWo(mm.wo || ""); setSn(mm.sn || ""); setProg(mm.prog || "Sample Program"); setDate(mm.date || date); setRev(mm.rev || "1"); setEco(mm.eco || "ECO-0001"); setChange(mm.change || "INITIAL RELEASE (GENERATED)");
+      const mm = j.meta || {}; if (mm.profile) setProfile(mm.profile); if (mm.sheetSize) setSheetSize(mm.sheetSize); if (mm.treeNudges) setTreeNudges(mm.treeNudges); if (mm.espByPn) setEspByPn(mm.espByPn); if (mm.customer) setCustomerOverride(mm.customer); setWo(mm.wo || ""); setSn(mm.sn || ""); setProg(mm.prog || "Sample Program"); setDate(mm.date || date); setRev(mm.rev || "1"); setEco(mm.eco || "ECO-0001"); setChange(mm.change || "INITIAL RELEASE (GENERATED)");
       setGenerated(null); setCheck(null);
     } catch (e) { alert("Project import failed: " + e.message); } }; rd.readAsText(f); };
   const importTemplates = f => { const rd = new FileReader(); rd.onload = () => { try {
@@ -2773,6 +2864,7 @@ function DocWorks() {
   const [profile, setProfile] = useState("island"); // output profile: ez | island
   const [sheetSize, setSheetSize] = useState("tabloid"); // letter (multi-sheet) | tabloid (11x17 one sheet)
   const [editMode, setEditMode] = useState(false);
+  const [treeNudges, setTreeNudges] = useState({}); // pn -> {dx,dy} manual drag offsets for family tree
   const [exportDirName, setExportDirName] = useState("");
   const [exportMsg, setExportMsg] = useState("");
   const docsRef = useRef(null);
@@ -2862,7 +2954,7 @@ function DocWorks() {
       <div style={{ background: C.navy, color: "#fff", padding: "10px 18px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <div style={{ fontWeight: 800, letterSpacing: ".12em", fontSize: 16 }}>DOC<span style={{ color: "#F2C14E" }}>WORKS</span></div>
         <div style={{ opacity: .75, fontSize: 11.5, borderLeft: "1px solid rgba(255,255,255,.3)", paddingLeft: 14 }}>BOM / drawing import → Family Tree · Parts List · Traveler · Work Instruction | 100% local</div>
-        <div style={{ marginLeft: "auto", fontSize: 10.5, opacity: .65, fontFamily: MONO }}>v0.17 PROTOTYPE</div>
+        <div style={{ marginLeft: "auto", fontSize: 10.5, opacity: .65, fontFamily: MONO }}>v0.20 PROTOTYPE</div>
       </div>
 
       <div style={{ display: "flex", flex: 1, minHeight: 0, flexWrap: "wrap" }}>
@@ -3124,7 +3216,19 @@ function DocWorks() {
                   ))}
                 </span>
               )}
-              {editMode && <span style={{ fontSize: 10, color: "#8A6D00" }}>Edits persist until you regenerate — exports capture your edits.</span>}
+              {tab === "tree" && sheetSize === "tabloid" && editMode && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: 4 }}>
+                  <span style={{ fontSize: 10, color: "#8A6D00", fontWeight: 700 }}>✋ Drag any box to reposition — lines follow</span>
+                  {Object.keys(treeNudges).length > 0 && (
+                    <button onClick={() => setTreeNudges({})}
+                      style={{ border: `1px solid ${C.line}`, background: "#fff", color: "#555", padding: "3px 8px", fontSize: 10, borderRadius: 2, cursor: "pointer" }}>
+                      ↺ Reset positions ({Object.keys(treeNudges).length})
+                    </button>
+                  )}
+                </span>
+              )}
+              {tab === "tree" && sheetSize !== "tabloid" && editMode && <span style={{ fontSize: 10, color: "#999" }}>Switch to 11×17 to drag-reposition boxes</span>}
+              {editMode && tab !== "tree" && <span style={{ fontSize: 10, color: "#8A6D00" }}>Edits persist until you regenerate — exports capture your edits.</span>}
               {exportMsg && <span style={{ fontSize: 11, fontWeight: 700, color: exportMsg.includes("failed") || exportMsg.includes("needs") ? "#B03A00" : "#2E6B3E" }}>{exportMsg}</span>}
             </div>
           )}
@@ -3152,7 +3256,7 @@ function DocWorks() {
             )}
             <div ref={docsRef} contentEditable={editMode} suppressContentEditableWarning
               style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 22, width: "100%", outline: editMode ? "2px dashed #B8860B" : "none", outlineOffset: 4, borderRadius: editMode ? 4 : 0 }}>
-              {generated && tab === "tree" && <TreeDoc bom={bom} excluded={generated.excluded} tops={generated.tops} cfgName={generated.cfgName} m={m} purchased={generated.purchased || {}} profile={profile} customer={customer} sheetSize={sheetSize} />}
+              {generated && tab === "tree" && <TreeDoc bom={bom} excluded={generated.excluded} tops={generated.tops} cfgName={generated.cfgName} m={m} purchased={generated.purchased || {}} profile={profile} customer={customer} sheetSize={sheetSize} editable={editMode && sheetSize === "tabloid"} nudges={treeNudges} setNudges={setTreeNudges} />}
               {generated && tab === "plist" && <PartsListDoc bom={bom} excluded={generated.excluded} tops={generated.tops} cfgName={generated.cfgName} m={m} purchased={generated.purchased || {}} profile={profile} customer={customer} />}
               {generated && tab === "trav" && <TravelerDocs bom={bom} excluded={generated.excluded} tops={generated.tops} m={m} profile={profile} espByPn={espByPn} customer={customer} />}
               {generated && tab === "wi" && <WIDocs bom={bom} excluded={generated.excluded} tops={generated.tops} m={m} profile={profile} espByPn={espByPn} customer={customer} />}
