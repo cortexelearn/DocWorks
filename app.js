@@ -1232,6 +1232,7 @@ const MONO = '"Consolas","JetBrains Mono",ui-monospace,monospace';
    vocabulary, and which document set is emitted. Generation logic is
    shared; profiles are presentation + naming only.
    ===================================================================== */
+const ISLAND_LOGO = "data:image/png;base64,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";
 const PROFILES = {
     ez: {
         id: "ez", label: "EZ Motors (default)",
@@ -1333,12 +1334,12 @@ function extractToolsAndDocs(ops) {
     (all.match(/\bdrawing\s+([A-Z]{1,4}-?\d{2,5}[A-Z0-9-]*)/gi) || []).forEach(d => docs.add(d.replace(/drawing\s+/i, "")));
     return { tools: [...tools], docs: [...docs], specs: [...specs] };
 }
-function DocHeader({ title, docNo, pn, extra, m }) {
+function DocHeader({ title, docNo, pn, extra, m, company }) {
     const cell = { padding: "5px 8px", borderRight: `1px solid ${C.navy}`, fontSize: 11 };
     const grid = { display: "grid", gridTemplateColumns: "120px 1fr 105px 45px 115px", border: `1.5px solid ${C.navy}` };
     return (React.createElement("div", { style: { marginBottom: 14 } },
         React.createElement("div", { style: grid },
-            React.createElement("div", { style: { ...cell, background: C.navy, color: "#fff", fontWeight: 800, letterSpacing: ".06em", fontSize: 12 } }, "EZ MOTORS"),
+            React.createElement("div", { style: { ...cell, background: C.navy, color: "#fff", fontWeight: 800, letterSpacing: ".06em", fontSize: 12 } }, company || "EZ MOTORS"),
             React.createElement("div", { style: { ...cell, background: C.navy, color: "#fff", fontWeight: 700 } }, title),
             React.createElement("div", { style: { ...cell, background: C.ltblue, fontWeight: 700, fontSize: 9, textTransform: "uppercase" } }, "Doc No."),
             React.createElement("div", { style: { ...cell, background: C.ltblue, fontWeight: 700, fontSize: 9, textTransform: "uppercase" } }, "Rev"),
@@ -1355,8 +1356,8 @@ function DocHeader({ title, docNo, pn, extra, m }) {
             ["Work Order", "Serial / Lot", "Program", "Issue Date", "Prepared", "Approved"].map((k, i) => (React.createElement("div", { key: k, style: { padding: "3px 8px", borderRight: i < 5 ? `1px solid ${C.line}` : "none", background: C.gray, fontWeight: 700, fontSize: 9, textTransform: "uppercase", color: "#555" } }, k))),
             [m.wo, m.sn, m.prog, m.date, "Engineering", "Quality"].map((v, i) => (React.createElement("div", { key: i, style: { padding: "3px 8px", borderRight: i < 5 ? `1px solid ${C.line}` : "none", fontFamily: i < 2 || i === 3 ? MONO : "inherit", fontSize: 10.5 } }, v))))));
 }
-function Sheet({ children }) {
-    return React.createElement("div", { style: { background: "#fff", width: "100%", maxWidth: 850, boxShadow: "0 2px 14px rgba(0,0,0,.13)", padding: "30px 34px", fontSize: 12.5, lineHeight: 1.45 } }, children);
+function Sheet({ children, wide }) {
+    return React.createElement("div", { style: { background: "#fff", width: "100%", maxWidth: wide ? 1360 : 850, boxShadow: "0 2px 14px rgba(0,0,0,.13)", padding: wide ? "24px 28px" : "30px 34px", fontSize: 12.5, lineHeight: 1.45 } }, children);
 }
 function H3({ children }) { return React.createElement("h3", { style: { fontSize: 13, color: C.navy, letterSpacing: ".04em", margin: "16px 0 8px", fontWeight: 700 } }, children); }
 function Intro({ children }) { return React.createElement("p", { style: { fontSize: 11.5, color: "#666", fontStyle: "italic", marginBottom: 10 } }, children); }
@@ -1367,7 +1368,10 @@ function Callout({ k, v }) {
         React.createElement("div", { style: { padding: 6, fontWeight: 800, textAlign: "center", background: bg, color: ink, display: "flex", alignItems: "center", justifyContent: "center" } }, k),
         React.createElement("div", { style: { padding: "6px 9px", background: bg } }, v)));
 }
-function Foot() { return React.createElement("div", { style: { textAlign: "center", color: "#999", fontSize: 9.5, marginTop: 18, letterSpacing: ".04em" } }, "UNCONTROLLED WHEN PRINTED | EZ MOTORS PROPRIETARY | AS9100 CONTROLLED DOCUMENT (SAMPLE)"); }
+function Foot({ company }) { return React.createElement("div", { style: { textAlign: "center", color: "#999", fontSize: 9.5, marginTop: 18, letterSpacing: ".04em" } },
+    "UNCONTROLLED WHEN PRINTED | ",
+    company || "EZ MOTORS",
+    " PROPRIETARY | AS9100 CONTROLLED DOCUMENT (SAMPLE)"); }
 /* ---- Family tree doc — drawing-sheet style (layout v2: ladders, min scale, sheet sets) ---- */
 function isAssemblyLike(part) { return /assembl|assy|\bkit\b/i.test(part.desc || ""); }
 /* layout v2 — readable letter-size family trees
@@ -1381,7 +1385,15 @@ const LEAF_STACK_MIN = 4; // stack when this many leaf children
 const MAXW = 980; // px; ~1:1 scale on letter landscape -> PN ~8pt
 const MAXH_MAIN = 440; // px; drawing height budget, main sheet (title+legend share the page)
 const MAXH_SUB = 560; // px; sub-sheets have more room
-function layoutTree2(bom, excluded, top, collapse, stackMode) {
+// SHEET SIZES: "letter" = readable multi-sheet set; "tabloid" = one 11x17 sheet, compact
+const SHEET_SIZES = {
+    letter: { NW: 118, NH: 60, GX: 12, ROWH: 116, descLines: 3, descChars: 19, fontPN: 11, MAXW: 980, usableW: 984, oneSheet: false },
+    tabloid: { NW: 86, NH: 40, GX: 8, ROWH: 74, descLines: 1, descChars: 16, fontPN: 8.5, MAXW: 100000, usableW: 1560, oneSheet: true },
+};
+function sheetDims(sizeId) { return SHEET_SIZES[sizeId] || SHEET_SIZES.letter; }
+function layoutTree2(bom, excluded, top, collapse, stackMode, D) {
+    D = D || sheetDims("letter");
+    const NW = D.NW, NH = D.NH, GX = D.GX, ROWH = D.ROWH, STACK_PITCH = D.NH + 12;
     // collapse: Set of pns to render as collapsed boxes (no children drawn)
     // stackMode: only stack leaf ladders when true (width-driven, decided by planner)
     collapse = collapse || new Set();
@@ -1454,23 +1466,28 @@ function layoutTree2(bom, excluded, top, collapse, stackMode) {
     return { root, flat, totalW: root.w, totalH: maxY };
 }
 /* sheet planner: plain layout -> stacked layout -> paginate; returns [{top, collapse, refs, layout, sheetNo}] */
-function planSheets(bom, excluded, top, maxH) {
+function planSheets(bom, excluded, top, maxH, D) {
+    D = D || sheetDims("letter");
+    // ONE-SHEET (11x17) mode: whole tree on a single sheet, stacked ladders on, no pagination
+    if (D.oneSheet) {
+        let L = layoutTree2(bom, excluded, top, null, true, D);
+        return [{ top, collapse: new Set(), refs: {}, layout: L, sheetNo: 1, oneSheet: true }];
+    }
     maxH = maxH || MAXH_MAIN;
-    const fits = L => L.totalW <= MAXW && L.totalH <= maxH;
-    const plain = layoutTree2(bom, excluded, top, null, false);
+    const fits = L => L.totalW <= D.MAXW && L.totalH <= maxH;
+    const plain = layoutTree2(bom, excluded, top, null, false, D);
     if (fits(plain))
         return [{ top, collapse: new Set(), refs: {}, layout: plain, sheetNo: 1 }];
-    const stacked = layoutTree2(bom, excluded, top, null, true);
+    const stacked = layoutTree2(bom, excluded, top, null, true, D);
     if (fits(stacked))
         return [{ top, collapse: new Set(), refs: {}, layout: stacked, sheetNo: 1 }];
-    // collapse every level-1 assembly that has children; give each its own sheet (recursively planned)
     const lvl1Asms = (bom.children[top] || []).filter(k => !excluded[k.pn] && (bom.children[k.pn] || []).some(c => !excluded[c.pn])).map(k => k.pn);
     const collapse = new Set(lvl1Asms);
-    let topLayout = layoutTree2(bom, excluded, top, collapse, false);
-    if (topLayout.totalW > MAXW || topLayout.totalH > maxH)
-        topLayout = layoutTree2(bom, excluded, top, collapse, true);
+    let topLayout = layoutTree2(bom, excluded, top, collapse, false, D);
+    if (topLayout.totalW > D.MAXW || topLayout.totalH > maxH)
+        topLayout = layoutTree2(bom, excluded, top, collapse, true, D);
     const sheets = [{ top, collapse, refs: {}, layout: topLayout }];
-    lvl1Asms.forEach(pn => sheets.push(...planSheets(bom, excluded, pn, MAXH_SUB)));
+    lvl1Asms.forEach(pn => sheets.push(...planSheets(bom, excluded, pn, MAXH_SUB, D)));
     sheets.forEach((s, i) => s.sheetNo = i + 1);
     const byTop = {};
     sheets.forEach(s => { if (byTop[s.top] === undefined)
@@ -1479,7 +1496,8 @@ function planSheets(bom, excluded, top, maxH) {
         s.refs[pn] = byTop[pn]; }); });
     return sheets;
 }
-function wrapText(s, maxChars) {
+function wrapText(s, maxChars, maxLines) {
+    maxLines = maxLines || 3;
     const words = String(s || "").toUpperCase().split(/\s+/).filter(Boolean);
     const lines = [];
     let cur = "";
@@ -1491,16 +1509,20 @@ function wrapText(s, maxChars) {
                 lines.push(cur);
             cur = w.length > maxChars ? w.slice(0, maxChars - 1) + "…" : w;
         }
-        if (lines.length === 3)
+        if (lines.length === maxLines)
             break;
     }
-    if (cur && lines.length < 3)
+    if (cur && lines.length < maxLines)
         lines.push(cur);
-    return lines.slice(0, 3);
+    return lines.slice(0, maxLines);
 }
 function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
     const L = sheet.layout;
-    const PADX = 20, PADY = 16, CALLOUT_H = 46;
+    const D = sheet.D || sheetDims("letter");
+    const NW = D.NW, NH = D.NH, GX = D.GX, ROWH = D.ROWH;
+    const compact = D.oneSheet;
+    const fPN = D.fontPN, fD = compact ? 5.6 : 7.2, fQ = compact ? 6 : 8, dLines = D.descLines, dChars = D.descChars;
+    const PADX = 20, PADY = 16, CALLOUT_H = compact ? 30 : 46;
     const callouts = L.flat.filter(n => !n.isStacked && n.inline && n.inline.length && n.inline.every(k => !k.kids.length && !k.collapsed) && !(n.stacked && n.stacked.length) && n.depth >= 1);
     const H = L.totalH + (callouts.length ? CALLOUT_H : 0) + 26 + PADY * 2;
     const W = L.totalW + PADX * 2;
@@ -1512,9 +1534,9 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
         const isTop = n.depth === 0;
         const key = n.pn + "_" + n.depth + "_" + Math.round(n.x);
         els.push(React.createElement("rect", { key: "b" + key, x: nx, y: ny, width: NW, height: NH, rx: 3, fill: missing ? "#FFF9E8" : "#fff", stroke: missing ? "#B8860B" : isTop ? C.navy : n.collapsed ? C.navy2 : "#444", strokeWidth: isTop ? 2 : n.collapsed ? 1.6 : 1.2, strokeDasharray: missing ? "5 3" : "none" }));
-        els.push(React.createElement("text", { key: "p" + key, x: nx + NW / 2, y: ny + 14, textAnchor: "middle", fontFamily: MONO, fontSize: 11, fontWeight: 700, fill: isTop ? C.navy : (n.kids.length || n.collapsed) ? C.navy2 : "#111" }, n.pn));
-        wrapText(n.part.desc, 19).forEach((l, li) => els.push(React.createElement("text", { key: "d" + key + li, x: nx + NW / 2, y: ny + 26 + li * 9, textAnchor: "middle", fontSize: 7.2, fill: "#333" }, l)));
-        els.push(React.createElement("text", { key: "q" + key, x: nx + NW / 2, y: ny + NH - 6, textAnchor: "middle", fontSize: 8, fontWeight: 600, fill: "#222" }, "QTY: " + (n.row ? n.row.qty : "1")));
+        els.push(React.createElement("text", { key: "p" + key, x: nx + NW / 2, y: ny + (compact ? 12 : 14), textAnchor: "middle", fontFamily: MONO, fontSize: fPN, fontWeight: 700, fill: isTop ? C.navy : (n.kids.length || n.collapsed) ? C.navy2 : "#111" }, n.pn));
+        wrapText(n.part.desc, dChars, dLines).forEach((l, li) => els.push(React.createElement("text", { key: "d" + key + li, x: nx + NW / 2, y: ny + (compact ? 21 : 26) + li * (compact ? 7 : 9), textAnchor: "middle", fontSize: fD, fill: "#333" }, l)));
+        els.push(React.createElement("text", { key: "q" + key, x: nx + NW / 2, y: ny + NH - (compact ? 4 : 6), textAnchor: "middle", fontSize: fQ, fontWeight: 600, fill: "#222" }, "QTY: " + (n.row ? n.row.qty : "1")));
         if (qaField) {
             els.push(React.createElement("text", { key: "qa" + key, x: nx + 4, y: ny + NH + 9, fontSize: 6.5, fill: "#0B6FB8", fontWeight: 700 }, "Q.A. ______"));
         }
@@ -1554,15 +1576,18 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
         els.push(React.createElement("text", { key: "ct" + n.pn, x: cx + cw / 2, y: cy + 14, textAnchor: "middle", fontSize: 7.5, fill: "#555" }, "(SEE " + n.pn + " BOM)"));
         els.push(React.createElement("line", { key: "cl" + n.pn, x1: PADX + n.x, y1: PADY + (n.depth + 1) * ROWH + NH, x2: PADX + n.x, y2: cy, stroke: "#888", strokeWidth: .8, strokeDasharray: "3 3" }));
     }
-    const svg = React.createElement("svg", { viewBox: `0 0 ${W} ${H}`, style: fit ? { width: Math.min(W, 984), maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" } : { width: W, height: "auto", display: "block" }, xmlns: "http://www.w3.org/2000/svg" }, els);
+    const cap = D.usableW;
+    const svg = React.createElement("svg", { viewBox: `0 0 ${W} ${H}`, style: fit ? { width: Math.min(W, cap), maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" } : { width: W, height: "auto", display: "block" }, xmlns: "http://www.w3.org/2000/svg" }, els);
     return { svg, W };
 }
-function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer }) {
+function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer, sheetSize }) {
     const P = activeProfile(profile);
     const [fit, setFit] = useState(true);
+    const D = sheetDims(sheetSize || "letter");
     // sheet plan across all tops
     let allSheets = [];
-    tops.forEach(t => { allSheets = allSheets.concat(planSheets(bom, excluded, t)); });
+    tops.forEach(t => { allSheets = allSheets.concat(planSheets(bom, excluded, t, undefined, D)); });
+    allSheets.forEach(s => { s.D = D; });
     allSheets.forEach((s, i) => s.sheetNo = i + 1);
     const byTop = {};
     allSheets.forEach(s => { if (byTop[s.top] === undefined)
@@ -1576,15 +1601,16 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer
     const td = { border: `1px solid ${C.line}`, padding: "3px 6px", verticalAlign: "top" };
     const missing = flat.filter(r => !r.isAsm && isAssemblyLike(r.part) && !purchased[r.part.pn]);
     const tbC = { padding: "3px 8px", borderBottom: `1px solid ${C.line}`, borderRight: `1px solid ${C.line}`, fontSize: 9 };
-    return (React.createElement(Sheet, null,
+    const oneSheet = D.oneSheet;
+    return (React.createElement(Sheet, { wide: oneSheet },
         React.createElement("div", { style: { border: `1.5px solid #111`, marginBottom: 12 } },
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "200px 1fr 250px" } },
                 React.createElement("div", { style: { padding: "8px 10px", borderRight: "1px solid #111" } },
-                    React.createElement("div", { style: { fontWeight: 900, fontSize: P.id === "island" ? 17 : 20, color: P.id === "island" ? "#0B6FB8" : C.navy, fontStyle: P.id === "island" ? "normal" : "italic", letterSpacing: "-.02em" } }, P.id === "island" ? React.createElement(React.Fragment, null,
-                        "ISLAND",
-                        React.createElement("span", { style: { fontSize: 10, color: "#1A1A1E" } }, " COMPONENTS")) : React.createElement(React.Fragment, null,
-                        "EZ",
-                        React.createElement("span", { style: { fontSize: 13, fontStyle: "normal", letterSpacing: ".08em" } }, "MOTORS"))),
+                    P.id === "island"
+                        ? React.createElement("img", { src: ISLAND_LOGO, alt: "Island Components", style: { height: 34, display: "block" } })
+                        : React.createElement("div", { style: { fontWeight: 900, fontSize: 20, color: C.navy, fontStyle: "italic", letterSpacing: "-.02em" } },
+                            "EZ",
+                            React.createElement("span", { style: { fontSize: 13, fontStyle: "normal", letterSpacing: ".08em" } }, "MOTORS")),
                     React.createElement("div", { style: { fontSize: 8.5, marginTop: 2 } }, P.company),
                     React.createElement("div", { style: { fontSize: 7.5, color: "#555" } }, P.address),
                     React.createElement("div", { style: { fontSize: 7.5, color: "#555" } }, P.cage)),
@@ -1602,10 +1628,10 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer
                     React.createElement("div", { style: { ...tbC, fontWeight: 700 } }, r[0]),
                     React.createElement("div", { style: { ...tbC, fontFamily: MONO } }, r[1]),
                     React.createElement("div", { style: { ...tbC, borderRight: "none", textAlign: "center", fontWeight: i === 0 ? 700 : 400 } }, r[2]))))))),
-        React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", marginBottom: 4 } },
-            React.createElement("button", { onClick: () => setFit(!fit), style: { border: `1px solid ${C.line}`, background: "#fff", fontSize: 10, padding: "3px 8px", cursor: "pointer", color: "#666" } }, fit ? "⤢ Actual size (scroll)" : "⤡ Fit width")),
+        !oneSheet && (React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", marginBottom: 4 } },
+            React.createElement("button", { onClick: () => setFit(!fit), style: { border: `1px solid ${C.line}`, background: "#fff", fontSize: 10, padding: "3px 8px", cursor: "pointer", color: "#666" } }, fit ? "⤢ Actual size (scroll)" : "⤡ Fit width"))),
         allSheets.map(sh => {
-            const d = SheetDrawing({ bom, sheet: sh, purchased, fit, qaField: P.qaField });
+            const d = SheetDrawing({ bom, sheet: sh, purchased, fit: oneSheet ? true : fit, qaField: P.qaField });
             const shTop = bom.parts[sh.top] || {};
             return (React.createElement("div", { key: sh.sheetNo, style: { border: "1px solid #111", marginBottom: 10, background: "#fff" } },
                 React.createElement("div", { style: { borderBottom: "1px solid #111", padding: "3px 8px", fontSize: 9, display: "flex", justifyContent: "space-between", background: "#FAFAF8" } },
@@ -1659,7 +1685,9 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer
                     missing.map(r => r.part.pn).join(", "),
                     "."))),
         React.createElement("div", { style: { textAlign: "center", borderTop: "1.5px solid #111", marginTop: 14, paddingTop: 5, fontSize: 9.5, fontWeight: 700, letterSpacing: ".05em" } },
-            "PROPRIETARY AND CONFIDENTIAL \u2014 EZ MOTORS, INC. ",
+            "PROPRIETARY AND CONFIDENTIAL \u2014 ",
+            P.company,
+            " ",
             React.createElement("span", { style: { float: "right", fontWeight: 400 } }, "AS9100D"))));
 }
 /* WI vignette library — schematic placeholder renderings per operation type.
@@ -1904,11 +1932,11 @@ function PartsListDoc({ bom, excluded, tops, cfgName, m, purchased, profile, cus
         React.createElement("div", { style: { border: `1.5px solid #111`, marginBottom: 12 } },
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "200px 1fr 250px" } },
                 React.createElement("div", { style: { padding: "8px 10px", borderRight: "1px solid #111" } },
-                    React.createElement("div", { style: { fontWeight: 900, fontSize: P.id === "island" ? 17 : 20, color: P.id === "island" ? "#0B6FB8" : C.navy, fontStyle: P.id === "island" ? "normal" : "italic", letterSpacing: "-.02em" } }, P.id === "island" ? React.createElement(React.Fragment, null,
-                        "ISLAND",
-                        React.createElement("span", { style: { fontSize: 10, color: "#1A1A1E" } }, " COMPONENTS")) : React.createElement(React.Fragment, null,
-                        "EZ",
-                        React.createElement("span", { style: { fontSize: 13, fontStyle: "normal", letterSpacing: ".08em" } }, "MOTORS"))),
+                    P.id === "island"
+                        ? React.createElement("img", { src: ISLAND_LOGO, alt: "Island Components", style: { height: 34, display: "block" } })
+                        : React.createElement("div", { style: { fontWeight: 900, fontSize: 20, color: C.navy, fontStyle: "italic", letterSpacing: "-.02em" } },
+                            "EZ",
+                            React.createElement("span", { style: { fontSize: 13, fontStyle: "normal", letterSpacing: ".08em" } }, "MOTORS")),
                     React.createElement("div", { style: { fontSize: 8.5, marginTop: 2 } }, P.company),
                     React.createElement("div", { style: { fontSize: 7.5, color: "#555" } }, P.address),
                     React.createElement("div", { style: { fontSize: 7.5, color: "#555" } }, P.cage)),
@@ -1956,16 +1984,16 @@ function PartsListDoc({ bom, excluded, tops, cfgName, m, purchased, profile, cus
             " LISTED WITHOUT LOADED BOM \u2014 VERIFY MISSING FILE OR CONFIRM PURCHASED COMPLETE."),
         React.createElement("div", { style: { marginTop: 10, fontSize: 8.5, color: "#555" } }, "NOTES: 1. LEVEL 0 = TOP LEVEL / END ITEM. QUANTITIES ARE PER ONE UNIT OF THE NEXT HIGHER ASSEMBLY. 2. THIS PARTS LIST IS GENERATED FROM THE RELEASED BOM STRUCTURE AND IS SUBORDINATE TO THE RELEASED BOM DOCUMENTS."),
         React.createElement("div", { style: { textAlign: "center", borderTop: "1.5px solid #111", marginTop: 12, paddingTop: 5, fontSize: 9.5, fontWeight: 700, letterSpacing: ".05em" } },
-            "PROPRIETARY AND CONFIDENTIAL \u2014 EZ MOTORS, INC. ",
+            "PROPRIETARY AND CONFIDENTIAL \u2014 ",
+            P.company,
+            " ",
             React.createElement("span", { style: { float: "right", fontWeight: 400 } }, "AS9100D"))));
 }
 /* ---- Traveler docs ---- */
 function IslandBrandBlock({ sub }) {
     return (React.createElement("div", { style: { textAlign: "center", marginBottom: 6 } },
-        React.createElement("div", { style: { fontWeight: 800, fontSize: 17, color: "#0B6FB8", letterSpacing: ".02em" } },
-            "ISLAND",
-            React.createElement("span", { style: { color: "#1A1A1E", fontWeight: 400 } }, " COMPONENTS")),
-        React.createElement("div", { style: { fontSize: 8, color: "#555" } }, "ISLAND COMPONENTS GROUP, INC. \u00B7 210 Marcus Blvd. Hauppauge, N.Y. 11788"),
+        React.createElement("img", { src: ISLAND_LOGO, alt: "Island Components", style: { height: 52, display: "block", margin: "0 auto 3px" } }),
+        React.createElement("div", { style: { fontSize: 8, color: "#555" } }, "ISLAND COMPONENTS GROUP, INC. \u00B7 210 Marcus Blvd. Hauppauge, N.Y. 11788 \u00B7 Tel (631) 563-4224"),
         sub && React.createElement("div", { style: { fontSize: 8, color: "#777" } }, sub)));
 }
 function IslandTravelerHeader({ p, pn, m, esp, customer }) {
@@ -1973,11 +2001,13 @@ function IslandTravelerHeader({ p, pn, m, esp, customer }) {
     const kc = { ...cell, background: C.gray, fontWeight: 700, fontSize: 9, textTransform: "uppercase" };
     return (React.createElement("div", { style: { marginBottom: 12 } },
         React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-end", borderBottom: "2px solid #0B6FB8", paddingBottom: 4, marginBottom: 6 } },
-            React.createElement("div", null,
-                React.createElement("div", { style: { fontWeight: 800, fontSize: 15 } },
-                    "Job Traveler ",
-                    React.createElement("span", { style: { fontSize: 10, fontWeight: 400, color: "#666" } }, "\u2014 Shop Copy")),
-                React.createElement("div", { style: { fontSize: 8.5, color: "#555" } }, "Island Components Group Inc.")),
+            React.createElement("div", { style: { display: "flex", gap: 10, alignItems: "center" } },
+                React.createElement("img", { src: ISLAND_LOGO, alt: "Island Components", style: { height: 30 } }),
+                React.createElement("div", null,
+                    React.createElement("div", { style: { fontWeight: 800, fontSize: 15 } },
+                        "Job Traveler ",
+                        React.createElement("span", { style: { fontSize: 10, fontWeight: 400, color: "#666" } }, "\u2014 Shop Copy")),
+                    React.createElement("div", { style: { fontSize: 8.5, color: "#555" } }, "Island Components Group Inc. \u2014 A G.W. Lisk Company"))),
             React.createElement("div", { style: { fontWeight: 800, fontFamily: MONO, fontSize: 14 } }, pn)),
         React.createElement("div", { style: { display: "grid", gridTemplateColumns: "auto 1fr auto 1fr auto 1fr", gap: 0 } },
             React.createElement("div", { style: kc }, "Part No."),
@@ -2018,7 +2048,7 @@ function TravelerDocs({ bom, excluded, tops, m, profile, espByPn, customer }) {
         return (React.createElement(Sheet, { key: pn },
             P.espMode
                 ? React.createElement(IslandTravelerHeader, { p: p, pn: pn, m: m, esp: espFor(pn, espByPn), customer: customer })
-                : React.createElement(DocHeader, { title: (p.desc || pn).toUpperCase() + " — TRAVELER", docNo: "TRV-" + pn, pn: pn, m: m }),
+                : React.createElement(DocHeader, { title: (p.desc || pn).toUpperCase() + " — TRAVELER", docNo: "TRV-" + pn, pn: pn, m: m, company: P.companyShort }),
             React.createElement(H3, null, "GENERAL NOTES"),
             React.createElement("ol", { style: { fontSize: 10.5, margin: "0 0 12px 18px" } }, [(P.espMode ? `Job Traveler for ${p.desc || pn} (${pn}). Detailed method per ${espFor(pn, espByPn)}. This traveler is the record of accomplishment, quantities, and sign-off.` : "Sample traveler. Drawing requirements, torque values, cure schedules, test limits, and process specifications require Engineering and Quality approval before production use."),
                 "Use only current released drawings, BOMs, specifications, approved supplier parts, calibrated tooling, and in-calibration test equipment.",
@@ -2076,7 +2106,7 @@ function TravelerDocs({ bom, excluded, tops, m, profile, espByPn, customer }) {
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "150px 1fr 130px 1fr", border: `1px solid ${C.line}`, fontSize: 10.5 } }, [["Accepted for NHA / Stock", "[  ]"], ["Rejected / NCR No.", "____________"],
                 ["Final QA Inspector", "____________"], ["Date", "____________"],
                 ["Storage Location", "____________"], ["Qty Accepted / Rejected", "______ / ______"]].map(([k, v], i) => (React.createElement(FragmentPair, { key: i, k: k, v: v })))),
-            React.createElement(Foot, null)));
+            React.createElement(Foot, { company: P.companyShort })));
     });
 }
 function FragmentPair({ k, v }) {
@@ -2248,7 +2278,7 @@ function WIDocs({ bom, excluded, tops, m, profile, espByPn, customer }) {
         const kids = (bom.children[pn] || []).filter(k => !excluded[k.pn]);
         const sec = safety.length ? 4 : 3;
         return (React.createElement(Sheet, { key: pn },
-            React.createElement(DocHeader, { title: "WORK INSTRUCTION — " + (p.desc || pn).toUpperCase(), docNo: "WI-" + pn, pn: pn, extra: "Traveler TRV-" + pn, m: m }),
+            React.createElement(DocHeader, { title: "WORK INSTRUCTION — " + (p.desc || pn).toUpperCase(), docNo: "WI-" + pn, pn: pn, extra: "Traveler TRV-" + pn, m: m, company: activeProfile(profile).companyShort }),
             React.createElement(H3, null, "1\u00A0\u00A0PURPOSE AND SCOPE"),
             React.createElement("p", { style: { fontSize: 12 } },
                 "Defines the detailed method for building ",
@@ -2342,7 +2372,7 @@ function WIDocs({ bom, excluded, tops, m, profile, espByPn, customer }) {
                 "Completed traveler TRV-",
                 pn,
                 " with all sign-offs; material and adhesive traceability records; cure records with charts where required; test and inspection reports with equipment IDs; nonconformance records per the approved quality system."),
-            React.createElement(Foot, null)));
+            React.createElement(Foot, { company: activeProfile(profile).companyShort })));
     });
 }
 /* =====================================================================
@@ -2692,6 +2722,98 @@ function StructureEditor({ bom, onRows, purchased, onPurchase }) {
         React.createElement("div", { style: { fontSize: 10, color: "#888", marginBottom: 6 } }, "Drag \u283F onto a new parent to re-parent \u00B7 \u270E edit fields \u00B7 \uFF0B add child \u00B7 \uD83D\uDED2 toggle purchased \u00B7 \uD83D\uDDD1 delete (cascades if last instance). Cycles are blocked. Changes re-validate live."),
         bom.tops.map(t => nodeRow(t, null, null, 0))));
 }
+/* =====================================================================
+   OFFICE EXPORT + EDIT MODE
+   - Word export: pane HTML -> Word-compatible .doc (SVGs converted to PNG)
+   - Excel export: parts-list table -> .xlsx via SheetJS
+   - Optional export folder via File System Access API (Chrome/Edge);
+     falls back to normal downloads elsewhere.
+   ===================================================================== */
+async function svgsToPngs(rootEl) {
+    const clones = rootEl.cloneNode(true);
+    const liveSvgs = rootEl.querySelectorAll("svg");
+    const cloneSvgs = clones.querySelectorAll("svg");
+    for (let i = 0; i < liveSvgs.length; i++) {
+        try {
+            const svg = liveSvgs[i];
+            const xml = new XMLSerializer().serializeToString(svg);
+            const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(xml);
+            const img = new Image();
+            await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+            const r = svg.getBoundingClientRect();
+            const scale = 2;
+            const cv = document.createElement("canvas");
+            cv.width = Math.max(50, r.width * scale);
+            cv.height = Math.max(30, r.height * scale);
+            const ctx = cv.getContext("2d");
+            ctx.fillStyle = "#fff";
+            ctx.fillRect(0, 0, cv.width, cv.height);
+            ctx.drawImage(img, 0, 0, cv.width, cv.height);
+            const png = document.createElement("img");
+            png.src = cv.toDataURL("image/png");
+            png.style.width = r.width + "px";
+            png.style.height = r.height + "px";
+            cloneSvgs[i].replaceWith(png);
+        }
+        catch (e) { /* keep svg on failure */ }
+    }
+    return clones;
+}
+function wordWrap(bodyHtml, title) {
+    return `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><title>${title}</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+<style>
+  @page { size: 8.5in 11in; margin: 0.6in; }
+  body { font-family: "Segoe UI", Calibri, Arial, sans-serif; font-size: 10pt; }
+  table { border-collapse: collapse; }
+  td, th { border: 1px solid #999; padding: 3pt 5pt; font-size: 9pt; }
+</style></head><body>${bodyHtml}</body></html>`;
+}
+let EXPORT_DIR = null; // FileSystemDirectoryHandle when user picks a folder
+async function pickExportFolder() {
+    if (!window.showDirectoryPicker)
+        throw new Error("Folder access needs Chrome or Edge. Exports will download normally instead.");
+    EXPORT_DIR = await window.showDirectoryPicker({ mode: "readwrite" });
+    return EXPORT_DIR.name;
+}
+async function saveOut(filename, blob) {
+    if (EXPORT_DIR) {
+        try {
+            const fh = await EXPORT_DIR.getFileHandle(filename, { create: true });
+            const ws = await fh.createWritable();
+            await ws.write(blob);
+            await ws.close();
+            return "folder";
+        }
+        catch (e) { /* fall through to download */ }
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    return "download";
+}
+async function exportPaneAsWord(paneEl, filename) {
+    const clone = await svgsToPngs(paneEl);
+    const blob = new Blob(["\ufeff" + wordWrap(clone.innerHTML, filename)], { type: "application/msword" });
+    return saveOut(filename.endsWith(".doc") ? filename : filename + ".doc", blob);
+}
+function exportTableAsXlsx(paneEl, filename) {
+    const tables = paneEl.querySelectorAll("table");
+    if (!tables.length)
+        throw new Error("No table found to export.");
+    const wb = XLSX.utils.book_new();
+    tables.forEach((t, i) => {
+        const ws = XLSX.utils.table_to_sheet(t);
+        XLSX.utils.book_append_sheet(wb, ws, ("Sheet" + (i + 1)).slice(0, 31));
+    });
+    const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    return saveOut(filename.endsWith(".xlsx") ? filename : filename + ".xlsx", new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+}
 function DocWorks() {
     const [bom, setBom] = useState(() => parseCsvBOM(SAMPLE));
     const [srcLabel, setSrcLabel] = useState("EZ Motors sample");
@@ -2714,7 +2836,7 @@ function DocWorks() {
     const tplFileRef = useRef(null);
     const applyRows = rows => { setBom(buildBOM(rows, [])); setGenerated(null); setCheck(null); setSrcLabel(s => /\(edited\)$/.test(s) ? s : s + " (edited)"); };
     const download = (name, obj) => { const b = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 500); };
-    const exportProject = () => download("docworks_project.json", { version: "0.9", rows: bom.rows, srcLabel, activeCfg, excluded, purchased, meta: { wo, sn, prog, date, rev, eco, change, profile, espByPn, customer }, customTemplates: customDecls });
+    const exportProject = () => download("docworks_project.json", { version: "0.9", rows: bom.rows, srcLabel, activeCfg, excluded, purchased, meta: { wo, sn, prog, date, rev, eco, change, profile, espByPn, customer, sheetSize }, customTemplates: customDecls });
     const importProject = f => {
         const rd = new FileReader();
         rd.onload = () => {
@@ -2732,6 +2854,8 @@ function DocWorks() {
                 const mm = j.meta || {};
                 if (mm.profile)
                     setProfile(mm.profile);
+                if (mm.sheetSize)
+                    setSheetSize(mm.sheetSize);
                 if (mm.espByPn)
                     setEspByPn(mm.espByPn);
                 if (mm.customer)
@@ -2779,6 +2903,11 @@ function DocWorks() {
     const [generated, setGenerated] = useState(null);
     const [purchased, setPurchased] = useState({}); // pn -> true (user marked "purchased, no BOM expected")
     const [profile, setProfile] = useState("ez"); // output profile: ez | island
+    const [sheetSize, setSheetSize] = useState("letter"); // letter (multi-sheet) | tabloid (11x17 one sheet)
+    const [editMode, setEditMode] = useState(false);
+    const [exportDirName, setExportDirName] = useState("");
+    const [exportMsg, setExportMsg] = useState("");
+    const docsRef = useRef(null);
     const [espByPn, setEspByPn] = useState({}); // Island: per-assembly ESP number overrides
     const custDet = useMemo(() => detectCustomer(bom), [bom]);
     const [customerOverride, setCustomerOverride] = useState("");
@@ -2844,7 +2973,7 @@ function DocWorks() {
                 "DOC",
                 React.createElement("span", { style: { color: "#F2C14E" } }, "WORKS")),
             React.createElement("div", { style: { opacity: .75, fontSize: 11.5, borderLeft: "1px solid rgba(255,255,255,.3)", paddingLeft: 14 } }, "BOM / drawing import \u2192 Family Tree \u00B7 Parts List \u00B7 Traveler \u00B7 Work Instruction | 100% local"),
-            React.createElement("div", { style: { marginLeft: "auto", fontSize: 10.5, opacity: .65, fontFamily: MONO } }, "v0.11 PROTOTYPE")),
+            React.createElement("div", { style: { marginLeft: "auto", fontSize: 10.5, opacity: .65, fontFamily: MONO } }, "v0.13 PROTOTYPE")),
         React.createElement("div", { style: { display: "flex", flex: 1, minHeight: 0, flexWrap: "wrap" } },
             React.createElement("div", { style: { width: 400, minWidth: 310, flexShrink: 0, background: C.paper, borderRight: `1px solid ${C.line}`, padding: 16, overflowY: "auto", maxHeight: "calc(100vh - 46px)" } },
                 React.createElement("div", { style: { marginBottom: 18 } },
@@ -2971,7 +3100,7 @@ function DocWorks() {
                             showSettings && (React.createElement("div", { style: { marginTop: 8, fontSize: 11, display: "grid", gap: 10 } },
                                 React.createElement("div", { style: { border: `1px solid ${C.line}`, padding: 8, background: "#fff" } },
                                     React.createElement("b", { style: { fontSize: 10.5, letterSpacing: ".05em" } }, "OUTPUT PROFILE"),
-                                    React.createElement("div", { style: { display: "flex", gap: 6, marginTop: 6 } }, Object.values(PROFILES).map(pr => (React.createElement("button", { key: pr.id, onClick: () => setProfile(pr.id), style: { ...btn, fontSize: 10.5, flex: 1, background: profile === pr.id ? C.navy : "#fff", color: profile === pr.id ? "#fff" : C.ink, fontWeight: profile === pr.id ? 700 : 400 } }, pr.label)))),
+                                    React.createElement("div", { style: { display: "flex", gap: 6, marginTop: 6 } }, Object.values(PROFILES).map(pr => (React.createElement("button", { key: pr.id, onClick: () => { setProfile(pr.id); setSheetSize(pr.id === "island" ? "tabloid" : "letter"); }, style: { ...btn, fontSize: 10.5, flex: 1, background: profile === pr.id ? C.navy : "#fff", color: profile === pr.id ? "#fff" : C.ink, fontWeight: profile === pr.id ? 700 : 400 } }, pr.label)))),
                                     React.createElement("div", { style: { fontSize: 9.5, color: "#777", marginTop: 6 } }, "Profile controls branding, document numbering, column labels, and vocabulary. Generation logic is identical; the Island profile emits Job Travelers + ESP procedures with the ICG title block."),
                                     profile === "island" && (React.createElement("div", { style: { marginTop: 8, borderTop: `1px solid ${C.line}`, paddingTop: 8 } },
                                         React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, marginBottom: 6 } },
@@ -3048,7 +3177,44 @@ function DocWorks() {
                         color: tab === id && generated ? C.navy : "#999", borderBottom: `3px solid ${tab === id && generated ? C.navy : "transparent"}`,
                         opacity: generated ? 1 : .45,
                     } }, label)))),
-                React.createElement("div", { style: { overflowY: "auto", padding: 22, display: "flex", flexDirection: "column", alignItems: "center", gap: 22, flex: 1 } },
+                generated && (React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center", padding: "6px 16px", borderBottom: `1px solid ${C.line}`, background: "#FCFCFA", flexWrap: "wrap" } },
+                    React.createElement("button", { onClick: () => setEditMode(v => !v), style: { border: `1px solid ${editMode ? "#B8860B" : C.navy}`, background: editMode ? "#FFF6DC" : "#fff", color: editMode ? "#8A6D00" : C.navy, padding: "4px 10px", fontSize: 11, fontWeight: 700, borderRadius: 2, cursor: "pointer" } }, editMode ? "✎ Editing ON — click any text" : "✎ Edit documents"),
+                    React.createElement("button", { onClick: async () => { try {
+                            setExportMsg("Exporting…");
+                            const names = { tree: "Family_Tree", plist: "Parts_List", trav: "Travelers", wi: profile === "island" ? "ESP_Procedures" : "Work_Instructions" };
+                            const where = await exportPaneAsWord(docsRef.current, "DocWorks_" + names[tab] + "_" + (generated.tops || []).join("+"));
+                            setExportMsg(where === "folder" ? "Saved to folder ✓" : "Downloaded ✓");
+                            setTimeout(() => setExportMsg(""), 3500);
+                        }
+                        catch (e) {
+                            setExportMsg("Export failed: " + e.message);
+                        } }, style: { border: `1px solid ${C.navy}`, background: "#fff", color: C.navy, padding: "4px 10px", fontSize: 11, fontWeight: 600, borderRadius: 2, cursor: "pointer" } }, "\u2B07 Export Word (.doc)"),
+                    tab === "plist" && (React.createElement("button", { onClick: async () => { try {
+                            const where = await exportTableAsXlsx(docsRef.current, "DocWorks_Parts_List_" + (generated.tops || []).join("+"));
+                            setExportMsg(where === "folder" ? "Saved to folder ✓" : "Downloaded ✓");
+                            setTimeout(() => setExportMsg(""), 3500);
+                        }
+                        catch (e) {
+                            setExportMsg("Export failed: " + e.message);
+                        } }, style: { border: `1px solid ${C.navy}`, background: "#fff", color: C.navy, padding: "4px 10px", fontSize: 11, fontWeight: 600, borderRadius: 2, cursor: "pointer" } }, "\u2B07 Export Excel (.xlsx)")),
+                    React.createElement("button", { onClick: async () => { try {
+                            const name = await pickExportFolder();
+                            setExportDirName(name);
+                            setExportMsg("Export folder set: " + name);
+                            setTimeout(() => setExportMsg(""), 3500);
+                        }
+                        catch (e) {
+                            setExportMsg(e.message);
+                            setTimeout(() => setExportMsg(""), 5000);
+                        } }, style: { border: `1px solid ${C.line}`, background: "#fff", color: "#555", padding: "4px 10px", fontSize: 11, borderRadius: 2, cursor: "pointer" } },
+                        "\uD83D\uDCC1 ",
+                        exportDirName ? "Folder: " + exportDirName : "Set export folder…"),
+                    tab === "tree" && (React.createElement("span", { style: { display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 4 } },
+                        React.createElement("span", { style: { fontSize: 10, color: "#777" } }, "Sheet:"),
+                        [["letter", "Letter (multi-sheet)"], ["tabloid", "11×17 (one sheet)"]].map(([id, lbl]) => (React.createElement("button", { key: id, onClick: () => setSheetSize(id), style: { border: `1px solid ${sheetSize === id ? C.navy : C.line}`, background: sheetSize === id ? C.navy : "#fff", color: sheetSize === id ? "#fff" : "#555", padding: "3px 8px", fontSize: 10.5, fontWeight: sheetSize === id ? 700 : 400, borderRadius: 2, cursor: "pointer" } }, lbl))))),
+                    editMode && React.createElement("span", { style: { fontSize: 10, color: "#8A6D00" } }, "Edits persist until you regenerate \u2014 exports capture your edits."),
+                    exportMsg && React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: exportMsg.includes("failed") || exportMsg.includes("needs") ? "#B03A00" : "#2E6B3E" } }, exportMsg))),
+                React.createElement("div", { ref: docsRef, contentEditable: editMode, suppressContentEditableWarning: true, style: { overflowY: "auto", padding: 22, display: "flex", flexDirection: "column", alignItems: "center", gap: 22, flex: 1, outline: editMode ? "2px dashed #B8860B" : "none", outlineOffset: -4 } },
                     !generated && (React.createElement("div", { style: { color: "#999", textAlign: "center", padding: "80px 20px", fontSize: 13 } },
                         React.createElement("div", { style: { fontSize: 38, marginBottom: 10, opacity: .4 } }, "\u2B21"),
                         "Drop a BOM (Excel/CSV), paste from a PDF, or use the sample.",
@@ -3072,7 +3238,7 @@ function DocWorks() {
                         check.info.map((x, i) => React.createElement("div", { key: "i" + i, style: { color: "#666", marginTop: 3 } },
                             "\u00B7 ",
                             x)))))),
-                    generated && tab === "tree" && React.createElement(TreeDoc, { bom: bom, excluded: generated.excluded, tops: generated.tops, cfgName: generated.cfgName, m: m, purchased: generated.purchased || {}, profile: profile, customer: customer }),
+                    generated && tab === "tree" && React.createElement(TreeDoc, { bom: bom, excluded: generated.excluded, tops: generated.tops, cfgName: generated.cfgName, m: m, purchased: generated.purchased || {}, profile: profile, customer: customer, sheetSize: sheetSize }),
                     generated && tab === "plist" && React.createElement(PartsListDoc, { bom: bom, excluded: generated.excluded, tops: generated.tops, cfgName: generated.cfgName, m: m, purchased: generated.purchased || {}, profile: profile, customer: customer }),
                     generated && tab === "trav" && React.createElement(TravelerDocs, { bom: bom, excluded: generated.excluded, tops: generated.tops, m: m, profile: profile, espByPn: espByPn, customer: customer }),
                     generated && tab === "wi" && React.createElement(WIDocs, { bom: bom, excluded: generated.excluded, tops: generated.tops, m: m, profile: profile, espByPn: espByPn, customer: customer }))))));
