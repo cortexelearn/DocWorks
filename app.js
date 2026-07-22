@@ -1388,7 +1388,7 @@ const MAXH_SUB = 560; // px; sub-sheets have more room
 // SHEET SIZES: "letter" = readable multi-sheet set; "tabloid" = one 11x17 sheet, compact
 const SHEET_SIZES = {
     letter: { NW: 118, NH: 60, GX: 12, ROWH: 116, descLines: 3, descChars: 19, fontPN: 11, MAXW: 980, usableW: 984, oneSheet: false },
-    tabloid: { NW: 92, NH: 40, GX: 22, ROWH: 74, descLines: 1, descChars: 16, fontPN: 8.5, MAXW: 100000, usableW: 1560, oneSheet: true, bulletLeaves: true, bulletW: 178, bulletLH: 9, VGAP: 26 },
+    tabloid: { NW: 120, NH: 52, GX: 30, ROWH: 96, descLines: 1, descChars: 22, fontPN: 11, MAXW: 100000, usableW: 1540, oneSheet: true, bulletLeaves: true, bulletW: 250, bulletLH: 13, VGAP: 34 },
 };
 function sheetDims(sizeId) { return SHEET_SIZES[sizeId] || SHEET_SIZES.letter; }
 /* BULLET LAYOUT (ICG house style): assemblies are boxed; their component (leaf)
@@ -1574,7 +1574,7 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
     const D = sheet.D || sheetDims("letter");
     const NW = D.NW, NH = D.NH, GX = D.GX, ROWH = D.ROWH;
     const compact = D.oneSheet;
-    const fPN = D.fontPN, fD = compact ? 5.6 : 7.2, fQ = compact ? 6 : 8, dLines = D.descLines, dChars = D.descChars;
+    const fPN = D.fontPN, fD = compact ? 7.5 : 7.2, fQ = compact ? 8 : 8, dLines = D.descLines, dChars = D.descChars;
     const PADX = 20, PADY = 16, CALLOUT_H = compact ? 30 : 46;
     const callouts = L.flat.filter(n => !n.isStacked && n.inline && n.inline.length && n.inline.every(k => !k.kids.length && !k.collapsed) && !(n.stacked && n.stacked.length) && n.depth >= 1);
     const H = L.totalH + (callouts.length ? CALLOUT_H : 0) + 26 + PADY * 2;
@@ -1595,8 +1595,6 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
             bels.push(React.createElement("text", { key: "p" + key, x: nx + NW / 2, y: ny + 13, textAnchor: "middle", fontFamily: MONO, fontSize: fPN, fontWeight: 700, fill: isTop ? C.navy : C.navy2 }, n.pn));
             wrapText(n.part.desc, dChars, 1).forEach((l) => bels.push(React.createElement("text", { key: "d" + key, x: nx + NW / 2, y: ny + 22, textAnchor: "middle", fontSize: fD, fill: "#333" }, l)));
             bels.push(React.createElement("text", { key: "q" + key, x: nx + NW / 2, y: ny + NH - 5, textAnchor: "middle", fontSize: fQ, fontWeight: 600, fill: "#222" }, "QTY: " + (n.row ? n.row.qty : "1")));
-            if (qaField)
-                bels.push(React.createElement("text", { key: "qa" + key, x: nx + 3, y: ny + NH + 8, fontSize: 6, fill: "#0B6FB8", fontWeight: 700 }, "Q.A. ____"));
             if (missing)
                 bels.push(React.createElement("text", { key: "m" + key, x: nx + NW / 2, y: ny + NH + 8, textAnchor: "middle", fontSize: 6.5, fontWeight: 700, fill: "#B8860B" }, "\u25B2 NO BOM"));
             if (isPurch)
@@ -1610,9 +1608,9 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
                     const ly = by + i * BLH + 4;
                     bels.push(React.createElement("line", { key: "bl" + key + i, x1: bx, y1: ly - 2.5, x2: bx + 5, y2: ly - 2.5, stroke: "#999", strokeWidth: .8 }));
                     const qty = k.row ? k.row.qty : "1";
-                    const label = k.pn + "  " + truncate(k.part.desc, 26) + "  (" + qty + ")";
+                    const label = k.pn + "  " + truncate(k.part.desc, 34) + "  (" + qty + ")";
                     const km = !k.kids.length && isAssemblyLike(k.part) && !purchased[k.pn];
-                    bels.push(React.createElement("text", { key: "bt" + key + i, x: bx + 8, y: ly, fontSize: 6.6, fill: km ? "#B8860B" : "#222", fontFamily: MONO },
+                    bels.push(React.createElement("text", { key: "bt" + key + i, x: bx + 9, y: ly, fontSize: 9.5, fill: km ? "#B8860B" : "#222", fontFamily: MONO },
                         label,
                         km ? " ▲" : ""));
                 });
@@ -1630,7 +1628,7 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
             }
         }
         const cap = D.usableW;
-        const svg = React.createElement("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMid meet", style: D.oneSheet ? { width: "100%", maxWidth: cap, maxHeight: 560, height: "auto", display: "block", margin: "0 auto" } : (fit ? { width: Math.min(W, cap), maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" } : { width: W, height: "auto", display: "block" }), xmlns: "http://www.w3.org/2000/svg" }, bels);
+        const svg = React.createElement("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMid meet", style: fit ? { width: Math.min(W, cap), maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" } : { width: W, height: "auto", display: "block", margin: "0 auto" }, xmlns: "http://www.w3.org/2000/svg" }, bels);
         return { svg, W };
     }
     const els = [];
@@ -1644,9 +1642,6 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
         els.push(React.createElement("text", { key: "p" + key, x: nx + NW / 2, y: ny + (compact ? 12 : 14), textAnchor: "middle", fontFamily: MONO, fontSize: fPN, fontWeight: 700, fill: isTop ? C.navy : (n.kids.length || n.collapsed) ? C.navy2 : "#111" }, n.pn));
         wrapText(n.part.desc, dChars, dLines).forEach((l, li) => els.push(React.createElement("text", { key: "d" + key + li, x: nx + NW / 2, y: ny + (compact ? 21 : 26) + li * (compact ? 7 : 9), textAnchor: "middle", fontSize: fD, fill: "#333" }, l)));
         els.push(React.createElement("text", { key: "q" + key, x: nx + NW / 2, y: ny + NH - (compact ? 4 : 6), textAnchor: "middle", fontSize: fQ, fontWeight: 600, fill: "#222" }, "QTY: " + (n.row ? n.row.qty : "1")));
-        if (qaField) {
-            els.push(React.createElement("text", { key: "qa" + key, x: nx + 4, y: ny + NH + 9, fontSize: 6.5, fill: "#0B6FB8", fontWeight: 700 }, "Q.A. ______"));
-        }
         if (n.collapsed && sheet.refs[n.pn])
             els.push(React.createElement("text", { key: "r" + key, x: nx + NW / 2, y: ny + NH + 11, textAnchor: "middle", fontSize: 7.5, fontWeight: 700, fill: C.navy2 }, "(SEE SHEET " + sheet.refs[n.pn] + ")"));
         if (missing)
@@ -1684,12 +1679,12 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
         els.push(React.createElement("line", { key: "cl" + n.pn, x1: PADX + n.x, y1: PADY + (n.depth + 1) * ROWH + NH, x2: PADX + n.x, y2: cy, stroke: "#888", strokeWidth: .8, strokeDasharray: "3 3" }));
     }
     const cap = D.usableW;
-    const svg = React.createElement("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMid meet", style: D.oneSheet ? { width: "100%", maxWidth: cap, maxHeight: 560, height: "auto", display: "block", margin: "0 auto" } : (fit ? { width: Math.min(W, cap), maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" } : { width: W, height: "auto", display: "block" }), xmlns: "http://www.w3.org/2000/svg" }, els);
+    const svg = React.createElement("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMid meet", style: fit ? { width: Math.min(W, cap), maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" } : { width: W, height: "auto", display: "block", margin: "0 auto" }, xmlns: "http://www.w3.org/2000/svg" }, els);
     return { svg, W };
 }
 function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer, sheetSize }) {
     const P = activeProfile(profile);
-    const [fit, setFit] = useState(true);
+    const [fit, setFit] = useState(false); // false = actual readable size (scroll); true = fit to width
     const D = sheetDims(sheetSize || "letter");
     // sheet plan across all tops
     let allSheets = [];
@@ -1735,8 +1730,9 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer
                     React.createElement("div", { style: { ...tbC, fontWeight: 700 } }, r[0]),
                     React.createElement("div", { style: { ...tbC, fontFamily: MONO } }, r[1]),
                     React.createElement("div", { style: { ...tbC, borderRight: "none", textAlign: "center", fontWeight: i === 0 ? 700 : 400 } }, r[2]))))))),
-        !oneSheet && (React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", marginBottom: 4 } },
-            React.createElement("button", { onClick: () => setFit(!fit), style: { border: `1px solid ${C.line}`, background: "#fff", fontSize: 10, padding: "3px 8px", cursor: "pointer", color: "#666" } }, fit ? "⤢ Actual size (scroll)" : "⤡ Fit width"))),
+        React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", marginBottom: 4, gap: 6 } },
+            React.createElement("span", { style: { fontSize: 10, color: "#999", alignSelf: "center" } }, oneSheet ? "Large-format sheet — use Actual size for legibility, Fit width for overview" : ""),
+            React.createElement("button", { onClick: () => setFit(!fit), style: { border: `1px solid ${C.line}`, background: "#fff", fontSize: 10, padding: "3px 8px", cursor: "pointer", color: "#666" } }, fit ? "⤢ Actual size (scroll)" : "⤡ Fit width")),
         allSheets.map(sh => {
             const d = SheetDrawing({ bom, sheet: sh, purchased, fit: oneSheet ? true : fit, qaField: P.qaField });
             const shTop = bom.parts[sh.top] || {};
@@ -2037,7 +2033,7 @@ function PartsListDoc({ bom, excluded, tops, cfgName, m, purchased, profile, cus
     const td = { border: `1px solid ${C.line}`, padding: "3px 6px", verticalAlign: "top", fontSize: 10 };
     const tbC = { padding: "3px 8px", borderBottom: `1px solid ${C.line}`, borderRight: `1px solid ${C.line}`, fontSize: 9 };
     return (React.createElement(Sheet, null,
-        React.createElement("div", { style: { border: `1.5px solid #111`, marginBottom: oneSheet ? 6 : 12 } },
+        React.createElement("div", { style: { border: `1.5px solid #111`, marginBottom: 12 } },
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "200px 1fr 250px" } },
                 React.createElement("div", { style: { padding: "8px 10px", borderRight: "1px solid #111" } },
                     P.id === "island"
@@ -2123,30 +2119,34 @@ function IslandTravelerHeader({ p, pn, m, esp, customer }) {
                         React.createElement("span", { style: { fontSize: 10, fontWeight: 400, color: "#666" } }, "\u2014 Shop Copy")),
                     React.createElement("div", { style: { fontSize: 8.5, color: "#555" } }, "Island Components Group Inc. \u2014 A G.W. Lisk Company"))),
             React.createElement("div", { style: { fontWeight: 800, fontFamily: MONO, fontSize: 14 } }, pn)),
-        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "auto 1fr auto 1fr auto 1fr", gap: 0 } },
-            React.createElement("div", { style: kc }, "Part No."),
-            React.createElement("div", { style: { ...cell, fontFamily: MONO } }, pn),
-            React.createElement("div", { style: kc }, "Description"),
-            React.createElement("div", { style: cell }, p.desc || ""),
-            React.createElement("div", { style: kc }, "Rev"),
-            React.createElement("div", { style: { ...cell, fontFamily: MONO } }, p.rev || "-"),
-            React.createElement("div", { style: kc }, "Job Number"),
-            React.createElement("div", { style: cell },
-                React.createElement(Y, { on: !m.wo }, m.wo || "________")),
-            React.createElement("div", { style: kc }, "Customer"),
-            React.createElement("div", { style: cell },
-                React.createElement(Y, { on: !customer }, customer || "________")),
-            React.createElement("div", { style: kc }, "Procedure"),
-            React.createElement("div", { style: { ...cell } },
-                React.createElement(Y, { on: esp === "ESP-*" }, esp)),
-            React.createElement("div", { style: kc }, "Date"),
-            React.createElement("div", { style: cell }, m.date),
-            React.createElement("div", { style: kc }, "Qty"),
-            React.createElement("div", { style: cell },
-                React.createElement(Y, { on: true }, "________")),
-            React.createElement("div", { style: kc }, "Routed By"),
-            React.createElement("div", { style: cell },
-                React.createElement(Y, { on: true }, "________")))));
+        React.createElement("table", { style: { width: "100%", borderCollapse: "collapse" } },
+            React.createElement("tbody", null,
+                React.createElement("tr", null,
+                    React.createElement("td", { style: kc }, "Part No."),
+                    React.createElement("td", { style: { ...cell, fontFamily: MONO } }, pn),
+                    React.createElement("td", { style: kc }, "Description"),
+                    React.createElement("td", { style: cell }, p.desc || ""),
+                    React.createElement("td", { style: kc }, "Rev"),
+                    React.createElement("td", { style: { ...cell, fontFamily: MONO } }, p.rev || "-")),
+                React.createElement("tr", null,
+                    React.createElement("td", { style: kc }, "Job Number"),
+                    React.createElement("td", { style: cell },
+                        React.createElement(Y, { on: !m.wo }, m.wo || "________")),
+                    React.createElement("td", { style: kc }, "Customer"),
+                    React.createElement("td", { style: cell },
+                        React.createElement(Y, { on: !customer }, customer || "________")),
+                    React.createElement("td", { style: kc }, "Procedure"),
+                    React.createElement("td", { style: cell },
+                        React.createElement(Y, { on: esp === "ESP-*" }, esp))),
+                React.createElement("tr", null,
+                    React.createElement("td", { style: kc }, "Date"),
+                    React.createElement("td", { style: cell }, m.date),
+                    React.createElement("td", { style: kc }, "Qty"),
+                    React.createElement("td", { style: cell },
+                        React.createElement(Y, { on: true }, "________")),
+                    React.createElement("td", { style: kc }, "Routed By"),
+                    React.createElement("td", { style: cell },
+                        React.createElement(Y, { on: true }, "________")))))));
 }
 function TravelerDocs({ bom, excluded, tops, m, profile, espByPn, customer }) {
     const P = activeProfile(profile);
@@ -2958,6 +2958,29 @@ async function domToDocx(rootEl, title, landscape) {
                     children.push(new D.Paragraph({ alignment: D.AlignmentType.CENTER, children: [new D.ImageRun({ data: dataUrlToUint8(im.dataUrl), transformation: { width: w, height: h } })] }));
                     continue;
                 }
+                // CSS grid with a fixed column count -> render as a Word table so it doesn't flatten
+                const cs0 = window.getComputedStyle(node);
+                if (cs0.display === "grid" && node.children.length > 1) {
+                    const tmpl = cs0.gridTemplateColumns || "";
+                    const ncol = tmpl.split(" ").filter(Boolean).length;
+                    if (ncol >= 2 && node.children.length >= ncol) {
+                        const cells = [...node.children];
+                        const rows = [];
+                        for (let i = 0; i < cells.length; i += ncol) {
+                            const rowCells = cells.slice(i, i + ncol).map(c => {
+                                const ccs = window.getComputedStyle(c);
+                                const shade = rgb(ccs.backgroundColor);
+                                return new D.TableCell({ shading: shade && shade !== "ffffff" ? { fill: shade } : undefined, margins: { top: 30, bottom: 30, left: 50, right: 50 }, children: [new D.Paragraph({ children: runsFromEl(c).length ? runsFromEl(c) : [new D.TextRun("")] })] });
+                            });
+                            while (rowCells.length < ncol)
+                                rowCells.push(new D.TableCell({ children: [new D.Paragraph("")] }));
+                            rows.push(new D.TableRow({ children: rowCells }));
+                        }
+                        children.push(new D.Table({ width: { size: 100, type: D.WidthType.PERCENTAGE }, rows }));
+                        children.push(new D.Paragraph({ text: "" }));
+                        continue;
+                    }
+                }
                 if (node.querySelector && (node.querySelector("table") || node.querySelector("svg"))) {
                     walkBlock(node);
                     continue;
@@ -3224,7 +3247,7 @@ function DocWorks() {
                 "DOC",
                 React.createElement("span", { style: { color: "#F2C14E" } }, "WORKS")),
             React.createElement("div", { style: { opacity: .75, fontSize: 11.5, borderLeft: "1px solid rgba(255,255,255,.3)", paddingLeft: 14 } }, "BOM / drawing import \u2192 Family Tree \u00B7 Parts List \u00B7 Traveler \u00B7 Work Instruction | 100% local"),
-            React.createElement("div", { style: { marginLeft: "auto", fontSize: 10.5, opacity: .65, fontFamily: MONO } }, "v0.15 PROTOTYPE")),
+            React.createElement("div", { style: { marginLeft: "auto", fontSize: 10.5, opacity: .65, fontFamily: MONO } }, "v0.16 PROTOTYPE")),
         React.createElement("div", { style: { display: "flex", flex: 1, minHeight: 0, flexWrap: "wrap" } },
             React.createElement("div", { style: { width: 400, minWidth: 310, flexShrink: 0, background: C.paper, borderRight: `1px solid ${C.line}`, padding: 16, overflowY: "auto", maxHeight: "calc(100vh - 46px)" } },
                 React.createElement("div", { style: { marginBottom: 18 } },
