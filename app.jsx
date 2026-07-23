@@ -958,6 +958,7 @@ const C = {
   ltblue: "#D9E2F1", gray: "#F2F2F2",
 };
 const MONO = '"Consolas","JetBrains Mono",ui-monospace,monospace';
+const miniBtn = { border: "1px solid #ccc", background: "#fff", color: "#333", width: 18, height: 18, lineHeight: "14px", fontSize: 12, borderRadius: 2, cursor: "pointer", padding: 0 };
 
 /* =====================================================================
    OUTPUT PROFILES — EZ (default) and Island Components Group.
@@ -1115,6 +1116,90 @@ function sheetDims(sizeId) { return SHEET_SIZES[sizeId] || SHEET_SIZES.letter; }
    children are listed as an indented bullet list directly beneath the box with qty.
    Sub-assemblies branch as sibling boxes. Vertical placement is dynamic (a node's
    children start below the node's box + its bullet list). Used for the 11x17 sheet. */
+/* Orthogonal connector router. Chooses which SIDE of the parent box the line leaves
+   from (bottom / left / right / top) based on where the child actually sits, then picks
+   routing lanes that avoid every text block and box on the sheet — so lines stay clear
+   of component lists even after boxes are dragged to new positions.
+   p, c: box rects {x,y,w,h}. pBottom/pRight: parent CONTENT extents (box + list).
+   obs: array of {x,y,w,h} obstacles to route around. */
+function segHitsAny(x1, y1, x2, y2, obs) {
+  const sx1 = Math.min(x1, x2) - 2, sx2 = Math.max(x1, x2) + 2;
+  const sy1 = Math.min(y1, y2) - 2, sy2 = Math.max(y1, y2) + 2;
+  for (const o of obs) {
+    if (sx2 < o.x || sx1 > o.x + o.w || sy2 < o.y || sy1 > o.y + o.h) continue;
+    return true;
+  }
+  return false;
+}
+function findClearX(pref, y1, y2, obs, dir) {
+  for (let s = 0; s <= 60; s++) {
+    const x = pref + dir * s * 7;
+    if (!segHitsAny(x, y1, x, y2, obs)) return x;
+  }
+  return pref;
+}
+function findClearY(pref, x1, x2, obs, dir) {
+  for (let s = 0; s <= 40; s++) {
+    const y = pref + dir * s * 6;
+    if (!segHitsAny(x1, y, x2, y, obs)) return y;
+  }
+  return pref;
+}
+function anchorPoint(r, side) {
+  switch (side) {
+    case "top": return [r.x + r.w / 2, r.y];
+    case "bottom": return [r.x + r.w / 2, r.y + r.h];
+    case "left": return [r.x, r.y + r.h / 2];
+    case "right": return [r.x + r.w, r.y + r.h / 2];
+    default: return [r.x + r.w / 2, r.y + r.h / 2];
+  }
+}
+/* pick sensible default sides when the user hasn't set them */
+function autoSides(p, c, pBottom) {
+  const pcx = p.x + p.w / 2, pcy = p.y + p.h / 2;
+  const ccx = c.x + c.w / 2, ccy = c.y + c.h / 2;
+  const hasList = pBottom > p.y + p.h + 2;
+  if (c.y >= pBottom - 4) return { out: hasList ? (ccx <= pcx ? "left" : "right") : "bottom", in: "top" };
+  if (c.y + c.h <= p.y + 4) return { out: "top", in: "bottom" };
+  return ccx < pcx ? { out: "left", in: "right" } : { out: "right", in: "left" };
+}
+/* Orthogonal route between two chosen anchor points. Sides may be overridden by the
+   user (right-click a box -> Connector side), otherwise chosen automatically. */
+function routeOrtho(p, c, pBottom, pRight, obs, outSide, inSide) {
+  const GAP = 14;
+  obs = obs || [];
+  const auto = autoSides(p, c, pBottom);
+  const oS = outSide && outSide !== "auto" ? outSide : auto.out;
+  const iS = inSide && inSide !== "auto" ? inSide : auto.in;
+  const a = anchorPoint(p, oS), b = anchorPoint(c, iS);
+  const off = (pt, side, d) => side === "top" ? [pt[0], pt[1] - d] : side === "bottom" ? [pt[0], pt[1] + d]
+    : side === "left" ? [pt[0] - d, pt[1]] : [pt[0] + d, pt[1]];
+  // the parent's exit lane must clear its component list, not just the box edge
+  const a1 = oS === "right" ? [Math.max(p.x + p.w, pRight) + GAP, a[1]]
+    : oS === "bottom" ? [a[0], Math.max(p.y + p.h, pBottom) + GAP]
+    : off(a, oS, GAP);
+  const b1 = off(b, iS, GAP);
+  const horizOut = oS === "left" || oS === "right";
+  const horizIn = iS === "left" || iS === "right";
+  const pts = [a, a1];
+  if (horizOut !== horizIn) {
+    // mixed: one clean corner. Travel along the exit lane first (staying outside the
+    // parent), then turn once toward the child's approach point.
+    pts.push([a1[0], b1[1]]);
+  } else if (horizOut) {
+    // both sideways: pick a vertical lane between them, clear of obstacles
+    const laneX = findClearX((a1[0] + b1[0]) / 2, Math.min(a1[1], b1[1]), Math.max(a1[1], b1[1]), obs, b1[0] >= a1[0] ? 1 : -1);
+    pts.push([laneX, a1[1]], [laneX, b1[1]]);
+  } else {
+    // both vertical: pick a horizontal bus between them
+    const laneY = (a1[1] + b1[1]) / 2;
+    pts.push([a1[0], laneY], [b1[0], laneY]);
+  }
+  pts.push(b1, b);
+  // collapse duplicate consecutive points
+  return pts.filter((pt, i) => i === 0 || Math.abs(pt[0] - pts[i - 1][0]) > 0.5 || Math.abs(pt[1] - pts[i - 1][1]) > 0.5);
+}
+
 function layoutBulletTree(bom, excluded, top, D) {
   // ICG house style: each assembly is a box with its component list hanging BELOW it
   // (indented bullets). Each assembly owns a vertical "lane" as wide as the widest of
@@ -1299,7 +1384,7 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
   const D = sheet.D || sheetDims("letter");
   const NW = D.NW, NH = D.NH, GX = D.GX, ROWH = D.ROWH;
   const compact = D.oneSheet;
-  const fPN = D.fontPN, fD = compact ? 7.5 : 7.2, fQ = compact ? 8 : 8, dLines = D.descLines, dChars = D.descChars;
+  const fPN = D.fontPN, fD = D.descFont || (compact ? 7.5 : 7.2), fQ = D.qtyFont || 8, dLines = D.descLines, dChars = D.descChars;
   const fBullet = D.bulletFont || 9.5;
   const PADX = 20, PADY = 16, CALLOUT_H = compact ? 30 : 46;
   const callouts = L.flat.filter(n => !n.isStacked && n.inline && n.inline.length && n.inline.every(k => !k.kids.length && !k.collapsed) && !(n.stacked && n.stacked.length) && n.depth >= 1);
@@ -1313,6 +1398,12 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
     const bels = [];
     const truncate = (s, nchar) => { s = String(s || "").toUpperCase(); return s.length > nchar ? s.slice(0, nchar - 1) + "…" : s; };
     const compChars = D.compChars || 46;
+    // obstacle rects for connector routing: every box and every component-list block
+    const OBS = L.flat.map(n => {
+      const x = PADX + (n.boxX != null ? n.boxX : n.x - NW / 2), y = PADY + n.y;
+      const listH = n.leafK && n.leafK.length ? n.leafK.length * BLH + 10 : 0;
+      return { pn: n.pn, box: { x, y, w: NW, h: NH }, list: listH ? { x: x + 2, y: y + NH + 4, w: Math.max(NW, n.compW || 0), h: listH } : null };
+    });
     for (const n of L.flat) {
       const bx0 = PADX + (n.boxX != null ? n.boxX : n.x - NW / 2), ny = PADY + n.y;
       const isTop = n.depth === 0;
@@ -1343,27 +1434,59 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
           bels.push(<text key={"bt" + key + i} x={railX + 9} y={ly} fontFamily={FONT} fontSize={fBullet} fontWeight={500} fill={km ? "#B8860B" : "#1A1A1E"}>{label}{km ? " ▲" : ""}</text>);
         });
       }
-      // connector to sub-assemblies: bus sits in the VGAP between this block's bottom and
-      // the child boxes' tops; reaches each child box TOP center. Never crosses a list.
+      // connector to sub-assemblies: each child routed independently with an orthogonal
+      // path that leaves the parent from whichever SIDE faces the child (top/bottom/left/
+      // right) and clears the parent's component list, so lines never cross text.
       if (n.asmK && n.asmK.length) {
-        const childTopY = PADY + n.asmK[0].y;         // all children share the same top Y
-        const busY = childTopY - (D.VGAP || 40) / 2;   // bus just above the child boxes
-        const dropX = bx0 - 7;                          // drop down the LEFT edge of the lane, clear of the indented list
-        // short stub from box bottom-left to the drop line, then down to the bus
-        bels.push(<line key={"vs" + key} x1={bx0 + NW / 2} y1={ny + NH} x2={bx0 + NW / 2} y2={ny + NH + 6} stroke={C.navy} strokeWidth={1.2} />);
-        bels.push(<line key={"vsh" + key} x1={bx0 + NW / 2} y1={ny + NH + 6} x2={dropX} y2={ny + NH + 6} stroke={C.navy} strokeWidth={1.2} />);
-        bels.push(<line key={"v" + key} x1={dropX} y1={ny + NH + 6} x2={dropX} y2={busY} stroke={C.navy} strokeWidth={1.2} />);
-        bels.push(<line key={"vh" + key} x1={dropX} y1={busY} x2={bx0 + NW / 2} y2={busY} stroke={C.navy} strokeWidth={1.2} />);
-        const px = bx0 + NW / 2;
-        const ends = [px];
-        n.asmK.forEach(k => { const kpx = PADX + (k.boxX != null ? k.boxX + NW / 2 : k.x); ends.push(kpx); bels.push(<line key={"c" + key + k.pn} x1={kpx} y1={busY} x2={kpx} y2={PADY + k.y} stroke={C.navy} strokeWidth={1.2} />); });
-        const x1 = Math.min(...ends), x2 = Math.max(...ends);
-        if (x2 > x1) bels.push(<line key={"h" + key} x1={x1} y1={busY} x2={x2} y2={busY} stroke={C.navy} strokeWidth={1.2} />);
+        const pList = n.hasBullets ? (n.leafK.length * BLH + 10) : 0;
+        const pRect = { x: bx0, y: ny, w: NW, h: NH };
+        const pContentBottom = ny + NH + pList;
+        const pContentRight = bx0 + Math.max(NW, n.compW || 0);
+        n.asmK.forEach(k => {
+          const kx0 = PADX + (k.boxX != null ? k.boxX : k.x - NW / 2), ky = PADY + k.y;
+          const cRect = { x: kx0, y: ky, w: NW, h: NH };
+          const obs = [];
+          for (const o of OBS) {
+            if (o.pn !== n.pn && o.pn !== k.pn) obs.push(o.box);   // other boxes
+            if (o.list && o.pn !== k.pn) obs.push(o.list);         // lists except the target's
+          }
+          const AN = sheet.anchors || {};
+          const pts = routeOrtho(pRect, cRect, pContentBottom, pContentRight, obs, (AN[n.pn] || {}).out, (AN[k.pn] || {}).in);
+          const d = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+          bels.push(<path key={"cn" + key + k.pn} d={d} fill="none" stroke={C.navy} strokeWidth={1.2} strokeLinejoin="round" />);
+          // small arrow head at the child anchor
+          const last = pts[pts.length - 1], prev = pts[pts.length - 2] || last;
+          const dxA = last[0] - prev[0], dyA = last[1] - prev[1];
+          const len = Math.hypot(dxA, dyA) || 1, ux = dxA / len, uy = dyA / len, s = 4;
+          bels.push(<path key={"ar" + key + k.pn} d={`M${last[0]} ${last[1]} L${last[0] - ux * s - uy * s * 0.6} ${last[1] - uy * s + ux * s * 0.6} L${last[0] - ux * s + uy * s * 0.6} ${last[1] - uy * s - ux * s * 0.6} Z`} fill={C.navy} />);
+        });
       }
     }
+    // expand the drawing bounds to include every node — including boxes dragged outside
+    // the original layout area — so nothing becomes unreachable off-canvas.
+    let minX = 0, minY = 0, maxX = W, maxY = H;
+    for (const n of L.flat) {
+      const bx = PADX + (n.boxX != null ? n.boxX : n.x - NW / 2), by = PADY + n.y;
+      const listH = n.hasBullets ? (n.leafK.length * BLH + 10) : 0;
+      minX = Math.min(minX, bx - 14); minY = Math.min(minY, by - 14);
+      maxX = Math.max(maxX, bx + Math.max(NW, n.compW || 0) + 14);
+      maxY = Math.max(maxY, by + NH + listH + 14);
+    }
+    const vbW = Math.max(40, maxX - minX), vbH = Math.max(40, maxY - minY);
     const cap = D.usableW;
-    const svg = <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={fit ? { width: Math.min(W, cap), maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" } : { width: W, height: "auto", display: "block", margin: "0 auto" }} xmlns="http://www.w3.org/2000/svg">{bels}</svg>;
-    return { svg, W };
+    // firm sheet boundary: W/H are the ORIGINAL layout bounds = what fits the 11x17 sheet.
+    // Anything dragged outside this rect will not print on the single sheet.
+    const border = [];
+    if (sheet.showBorder && D.oneSheet) {
+      border.push(<rect key="pa" x={0} y={0} width={W} height={H} fill="none" stroke="#B03A00" strokeWidth={1.6} strokeDasharray="12 7" opacity={.85} />);
+      border.push(<text key="pal" x={4} y={-7} fontFamily='"Arial",sans-serif' fontSize={11} fontWeight={700} fill="#B03A00">11×17 SHEET — content outside this border will not print</text>);
+    }
+    const z = sheet.zoom || 1;
+    const svg = <svg viewBox={`${minX} ${minY} ${vbW} ${vbH}`} preserveAspectRatio="xMidYMid meet"
+      style={fit ? { width: Math.min(vbW, cap), maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" }
+                 : { width: vbW * z, height: "auto", display: "block", margin: "0 auto" }}
+      xmlns="http://www.w3.org/2000/svg">{border}{bels}</svg>;
+    return { svg, W: Math.round(vbW * z) };
   }
 
   const els = [];
@@ -1418,9 +1541,11 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
   return { svg, W };
 }
 
-function DraggableSvg({ svg, W, H, editable, nudges, setNudges, fit, cap }) {
+function DraggableSvg({ svg, W, H, editable, nudges, setNudges, fit, cap, anchors, setAnchors }) {
   const ref = useRef(null);
   const drag = useRef(null);
+  const anchorsRef = useRef(anchors);
+  anchorsRef.current = anchors;
   useEffect(() => {
     if (!editable) return;
     const host = ref.current; if (!host) return;
@@ -1461,19 +1586,71 @@ function DraggableSvg({ svg, W, H, editable, nudges, setNudges, fit, cap }) {
       if (drag.current && drag.current.rect) drag.current.rect.style.cursor = "grab";
       drag.current = null;
     };
+    // right-click a box -> choose which side connectors attach to
+    const onCtx = e => {
+      const rect = e.target.closest && e.target.closest(".dw-draggable"); if (!rect) return;
+      const pn = rect.getAttribute("data-pn"); if (!pn) return;
+      e.preventDefault(); e.stopPropagation();
+      const menu = document.createElement("div");
+      menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;z-index:99999;background:#fff;border:1px solid #999;box-shadow:0 3px 12px rgba(0,0,0,.25);font:12px Segoe UI,Arial;border-radius:3px;overflow:hidden;min-width:210px`;
+      const hdr = document.createElement("div");
+      hdr.textContent = pn + " — connector sides";
+      hdr.style.cssText = "padding:6px 12px;background:#1F3864;color:#fff;font-weight:700";
+      menu.appendChild(hdr);
+      const section = (label, which) => {
+        const t = document.createElement("div");
+        t.textContent = label;
+        t.style.cssText = "padding:5px 12px 2px;color:#888;font-size:10.5;text-transform:uppercase;letter-spacing:.04em";
+        menu.appendChild(t);
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;gap:4px;padding:2px 10px 6px";
+        ["auto", "top", "bottom", "left", "right"].forEach(side => {
+          const b = document.createElement("button");
+          b.textContent = side === "auto" ? "Auto" : side[0].toUpperCase() + side.slice(1);
+          const cur = ((anchorsRef.current || {})[pn] || {})[which] || "auto";
+          b.style.cssText = `flex:1;padding:4px 2px;font-size:10.5;cursor:pointer;border:1px solid ${cur === side ? "#1F3864" : "#ccc"};background:${cur === side ? "#1F3864" : "#fff"};color:${cur === side ? "#fff" : "#333"};border-radius:2px`;
+          b.onclick = () => { setAnchors(prev => ({ ...(prev || {}), [pn]: { ...((prev || {})[pn] || {}), [which]: side } })); cleanup(); };
+          row.appendChild(b);
+        });
+        menu.appendChild(row);
+      };
+      section("Line comes IN on", "in");
+      section("Lines go OUT from", "out");
+      const reset = document.createElement("div");
+      reset.textContent = "↺ Reset this box's sides";
+      reset.style.cssText = "padding:7px 12px;cursor:pointer;border-top:1px solid #eee;color:#555";
+      reset.onmouseenter = () => reset.style.background = "#EEF";
+      reset.onmouseleave = () => reset.style.background = "#fff";
+      reset.onclick = () => { setAnchors(prev => { const n2 = { ...(prev || {}) }; delete n2[pn]; return n2; }); cleanup(); };
+      menu.appendChild(reset);
+      const cleanup = () => { if (menu.parentNode) document.body.removeChild(menu); document.removeEventListener("mousedown", away); };
+      const away = ev => { if (!menu.contains(ev.target)) cleanup(); };
+      document.body.appendChild(menu);
+      setTimeout(() => document.addEventListener("mousedown", away), 0);
+    };
     host.addEventListener("pointerdown", onDown);
-    return () => { host.removeEventListener("pointerdown", onDown); window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
-  }, [editable, nudges, setNudges]);
+    host.addEventListener("contextmenu", onCtx);
+    return () => { host.removeEventListener("pointerdown", onDown); host.removeEventListener("contextmenu", onCtx); window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
+  }, [editable, nudges, setNudges, setAnchors]);
   return (
     <div ref={ref} style={fit ? {} : { width: W, minWidth: W }}>
       {svg}
     </div>
   );
 }
-function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer, sheetSize, editable, nudges, setNudges }) {
+function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer, sheetSize, editable, nudges, setNudges, anchors, setAnchors, textScale, zoom, showBorder }) {
   const P = activeProfile(profile);
   const [fit, setFit] = useState(false); // false = actual readable size (scroll); true = fit to width
-  const D = sheetDims(sheetSize || "letter");
+  const tA = (textScale && textScale.asm) || 1;   // assembly name/box scale
+  const tC = (textScale && textScale.comp) || 1;  // component line scale
+  const D = (() => {
+    const b = sheetDims(sheetSize || "letter");
+    return { ...b,
+      NW: Math.round(b.NW * tA), NH: Math.round(b.NH * tA),
+      fontPN: b.fontPN * tA, descFont: (b.oneSheet ? 7.5 : 7.2) * tA, qtyFont: 8 * tA,
+      bulletFont: (b.bulletFont || 9.5) * tC, bulletLH: Math.round((b.bulletLH || 12) * tC),
+    };
+  })();
   // sheet plan across all tops
   let allSheets = [];
   tops.forEach(t => { allSheets = allSheets.concat(planSheets(bom, excluded, t, undefined, D)); });
@@ -1489,7 +1666,7 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer
       });
     });
   }
-  allSheets.forEach(s => { s.D = D; s.editable = editable; s.nudges = nudges; s.setNudges = setNudges; });
+  allSheets.forEach(s => { s.D = D; s.editable = editable; s.nudges = nudges; s.setNudges = setNudges; s.anchors = anchors || {}; s.zoom = zoom || 1; s.showBorder = showBorder; });
   allSheets.forEach((s, i) => s.sheetNo = i + 1);
   const byTop = {}; allSheets.forEach(s => { if (byTop[s.top] === undefined) byTop[s.top] = s.sheetNo; });
   allSheets.forEach(s => { s.refs = {}; s.collapse.forEach(pn => { if (byTop[pn]) s.refs[pn] = byTop[pn]; }); });
@@ -1540,7 +1717,7 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer
         </button>
       </div>
       {allSheets.map(sh => {
-        const d = SheetDrawing({ bom, sheet: sh, purchased, fit: oneSheet ? true : fit, qaField: P.qaField });
+        const d = SheetDrawing({ bom, sheet: sh, purchased, fit, qaField: P.qaField });
         const shTop = bom.parts[sh.top] || {};
         return (
           <div key={sh.sheetNo} style={{ border: "1px solid #111", marginBottom: oneSheet ? 4 : 10, background: "#fff", breakInside: "avoid", pageBreakInside: "avoid" }}>
@@ -1550,7 +1727,7 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer
             </div>
             <div style={{ padding: 8, overflowX: fit ? "hidden" : "auto", display: "flex", justifyContent: "center" }}>
               {editable
-                ? <DraggableSvg svg={d.svg} W={d.W} H={0} editable={editable} nudges={nudges} setNudges={setNudges} fit={fit} cap={D.usableW} />
+                ? <DraggableSvg svg={d.svg} W={d.W} H={0} editable={editable} nudges={nudges} setNudges={setNudges} fit={fit} cap={D.usableW} anchors={anchors} setAnchors={setAnchors} />
                 : (fit ? d.svg : <div style={{ width: d.W, minWidth: d.W }}>{d.svg}</div>)}
             </div>
           </div>
@@ -2360,7 +2537,7 @@ function ImportPanel({ onCommit, existingCount, llmCfg }) {
   function skipFile() { setStage(null); advanceQueue(); }
 
   const nCols = stage ? Math.max(...stage.grid.slice(0, 12).map(r => r.length)) : 0;
-  const btn = { border: `1px solid ${C.navy}`, background: "#fff", color: C.navy, padding: "5px 10px", fontSize: 11.5, fontWeight: 600, borderRadius: 2, cursor: "pointer" };
+const btn = { border: `1px solid ${C.navy}`, background: "#fff", color: C.navy, padding: "5px 10px", fontSize: 11.5, fontWeight: 600, borderRadius: 2, cursor: "pointer" };
   const btnP = { ...btn, background: C.navy, color: "#fff" };
 
   return (
@@ -2840,14 +3017,14 @@ function DocWorks() {
   const projFileRef = useRef(null); const tplFileRef = useRef(null);
   const applyRows = rows => { setBom(buildBOM(rows, [])); setGenerated(null); setCheck(null); setSrcLabel(s => /\(edited\)$/.test(s) ? s : s + " (edited)"); };
   const download = (name, obj) => { const b = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 500); };
-  const exportProject = () => download("docworks_project.json", { version: "0.9", rows: bom.rows, srcLabel, activeCfg, excluded, purchased, meta: { wo, sn, prog, date, rev, eco, change, profile, espByPn, customer, sheetSize, treeNudges }, customTemplates: customDecls });
+  const exportProject = () => download("docworks_project.json", { version: "0.9", rows: bom.rows, srcLabel, activeCfg, excluded, purchased, meta: { wo, sn, prog, date, rev, eco, change, profile, espByPn, customer, sheetSize, treeNudges, treeAnchors, textScale, treeZoom, showBorder }, customTemplates: customDecls });
   const importProject = f => { const rd = new FileReader(); rd.onload = () => { try {
       const j = JSON.parse(rd.result);
       if (!Array.isArray(j.rows)) throw new Error("no rows[]");
       setCustomDecls(j.customTemplates || []); setCustomTemplates(j.customTemplates || []);
       setBom(buildBOM(j.rows, [])); setSrcLabel(j.srcLabel || f.name); setActiveCfg(j.activeCfg || "actuator");
       setExcluded(j.excluded || {}); setPurchased(j.purchased || {});
-      const mm = j.meta || {}; if (mm.profile) setProfile(mm.profile); if (mm.sheetSize) setSheetSize(mm.sheetSize); if (mm.treeNudges) setTreeNudges(mm.treeNudges); if (mm.espByPn) setEspByPn(mm.espByPn); if (mm.customer) setCustomerOverride(mm.customer); setWo(mm.wo || ""); setSn(mm.sn || ""); setProg(mm.prog || "Sample Program"); setDate(mm.date || date); setRev(mm.rev || "1"); setEco(mm.eco || "ECO-0001"); setChange(mm.change || "INITIAL RELEASE (GENERATED)");
+      const mm = j.meta || {}; if (mm.profile) setProfile(mm.profile); if (mm.sheetSize) setSheetSize(mm.sheetSize); if (mm.treeNudges) setTreeNudges(mm.treeNudges); if (mm.treeAnchors) setTreeAnchors(mm.treeAnchors); if (mm.textScale) setTextScale(mm.textScale); if (mm.treeZoom) setTreeZoom(mm.treeZoom); if (typeof mm.showBorder === "boolean") setShowBorder(mm.showBorder); if (mm.espByPn) setEspByPn(mm.espByPn); if (mm.customer) setCustomerOverride(mm.customer); setWo(mm.wo || ""); setSn(mm.sn || ""); setProg(mm.prog || "Sample Program"); setDate(mm.date || date); setRev(mm.rev || "1"); setEco(mm.eco || "ECO-0001"); setChange(mm.change || "INITIAL RELEASE (GENERATED)");
       setGenerated(null); setCheck(null);
     } catch (e) { alert("Project import failed: " + e.message); } }; rd.readAsText(f); };
   const importTemplates = f => { const rd = new FileReader(); rd.onload = () => { try {
@@ -2861,7 +3038,7 @@ function DocWorks() {
   const clearWorkspace = (keepProfile) => {
     // clear every piece of working state back to a clean slate
     setExcluded({}); setPurchased({}); setManualTop(""); setActiveCfg("actuator");
-    setGenerated(null); setCheck(null); setEditMode(false); setTreeNudges({});
+    setGenerated(null); setCheck(null); setEditMode(false); setTreeNudges({}); setTreeAnchors({}); setTextScale({ asm: 1, comp: 1 }); setTreeZoom(1); setShowBorder(true);
     setEspByPn({}); setCustomerOverride(""); setWo(""); setSn("");
     setRev("1"); setEco("ECO-0001"); setChange("INITIAL RELEASE (GENERATED)");
     setCustomDecls([]); setCustomTemplates([]);
@@ -2887,6 +3064,10 @@ function DocWorks() {
   const [importKey, setImportKey] = useState(0);
   const [paneDrop, setPaneDrop] = useState(false);
   const [treeNudges, setTreeNudges] = useState({}); // pn -> {dx,dy} manual drag offsets for family tree
+  const [treeAnchors, setTreeAnchors] = useState({}); // pn -> {in,out} connector side overrides
+  const [textScale, setTextScale] = useState({ asm: 1, comp: 1 }); // family-tree text sizing
+  const [treeZoom, setTreeZoom] = useState(1);
+  const [showBorder, setShowBorder] = useState(true);
   const [exportDirName, setExportDirName] = useState("");
   const [exportMsg, setExportMsg] = useState("");
   const docsRef = useRef(null);
@@ -2979,7 +3160,7 @@ function DocWorks() {
             style={{ background: "rgba(255,255,255,.12)", color: "#fff", border: "1px solid rgba(255,255,255,.35)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" }}>📂 Load Project</button>
           <button onClick={resetAll} title="Clear everything back to an empty workspace"
             style={{ background: "transparent", color: "#F2C14E", border: "1px solid rgba(242,193,78,.6)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" }}>↺ Reset All</button>
-          <span style={{ fontSize: 10.5, opacity: .55, fontFamily: MONO, marginLeft: 4 }}>v0.21</span>
+          <span style={{ fontSize: 10.5, opacity: .55, fontFamily: MONO, marginLeft: 4 }}>v0.23</span>
         </div>
       </div>
 
@@ -3243,13 +3424,36 @@ function DocWorks() {
                   ))}
                 </span>
               )}
+              {tab === "tree" && sheetSize === "tabloid" && (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, marginLeft: 4, paddingLeft: 8, borderLeft: `1px solid ${C.line}` }}>
+                  {[["Assy", "asm"], ["Comp", "comp"]].map(([lbl, k]) => (
+                    <span key={k} style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                      <span style={{ fontSize: 10, color: "#777" }}>{lbl} text</span>
+                      <button onClick={() => setTextScale(s => ({ ...s, [k]: Math.max(0.6, +(s[k] - 0.1).toFixed(2)) }))} style={miniBtn}>−</button>
+                      <span style={{ fontSize: 10, fontFamily: MONO, minWidth: 30, textAlign: "center" }}>{Math.round(textScale[k] * 100)}%</span>
+                      <button onClick={() => setTextScale(s => ({ ...s, [k]: Math.min(2.4, +(s[k] + 0.1).toFixed(2)) }))} style={miniBtn}>+</button>
+                    </span>
+                  ))}
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+                    <span style={{ fontSize: 10, color: "#777" }}>Zoom</span>
+                    <button onClick={() => setTreeZoom(z => Math.max(0.2, +(z - 0.1).toFixed(2)))} style={miniBtn}>−</button>
+                    <span style={{ fontSize: 10, fontFamily: MONO, minWidth: 34, textAlign: "center" }}>{Math.round(treeZoom * 100)}%</span>
+                    <button onClick={() => setTreeZoom(z => Math.min(3, +(z + 0.1).toFixed(2)))} style={miniBtn}>+</button>
+                    <button onClick={() => setTreeZoom(1)} style={{ ...miniBtn, width: "auto", padding: "1px 6px" }}>1:1</button>
+                  </span>
+                  <button onClick={() => setShowBorder(v => !v)}
+                    style={{ border: `1px solid ${showBorder ? "#B03A00" : C.line}`, background: showBorder ? "#FBE4D5" : "#fff", color: showBorder ? "#B03A00" : "#666", padding: "3px 8px", fontSize: 10, fontWeight: showBorder ? 700 : 400, borderRadius: 2, cursor: "pointer" }}>
+                    ⬚ 11×17 border
+                  </button>
+                </span>
+              )}
               {tab === "tree" && sheetSize === "tabloid" && editMode && (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: 4 }}>
-                  <span style={{ fontSize: 10, color: "#8A6D00", fontWeight: 700 }}>✋ Drag any box to reposition — lines follow</span>
-                  {Object.keys(treeNudges).length > 0 && (
-                    <button onClick={() => setTreeNudges({})}
+                  <span style={{ fontSize: 10, color: "#8A6D00", fontWeight: 700 }}>✋ Drag boxes to reposition · right-click a box to set which side lines attach</span>
+                  {(Object.keys(treeNudges).length > 0 || Object.keys(treeAnchors).length > 0) && (
+                    <button onClick={() => { setTreeNudges({}); setTreeAnchors({}); setTextScale({ asm: 1, comp: 1 }); setTreeZoom(1); setShowBorder(true); }}
                       style={{ border: `1px solid ${C.line}`, background: "#fff", color: "#555", padding: "3px 8px", fontSize: 10, borderRadius: 2, cursor: "pointer" }}>
-                      ↺ Reset positions ({Object.keys(treeNudges).length})
+                      ↺ Reset layout ({Object.keys(treeNudges).length + Object.keys(treeAnchors).length})
                     </button>
                   )}
                 </span>
@@ -3297,7 +3501,7 @@ function DocWorks() {
             )}
             <div ref={docsRef} contentEditable={editMode} suppressContentEditableWarning
               style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 22, width: "100%", outline: editMode ? "2px dashed #B8860B" : "none", outlineOffset: 4, borderRadius: editMode ? 4 : 0 }}>
-              {generated && tab === "tree" && <TreeDoc bom={bom} excluded={generated.excluded} tops={generated.tops} cfgName={generated.cfgName} m={m} purchased={generated.purchased || {}} profile={profile} customer={customer} sheetSize={sheetSize} editable={editMode && sheetSize === "tabloid"} nudges={treeNudges} setNudges={setTreeNudges} />}
+              {generated && tab === "tree" && <TreeDoc bom={bom} excluded={generated.excluded} tops={generated.tops} cfgName={generated.cfgName} m={m} purchased={generated.purchased || {}} profile={profile} customer={customer} sheetSize={sheetSize} editable={editMode && sheetSize === "tabloid"} nudges={treeNudges} setNudges={setTreeNudges} anchors={treeAnchors} setAnchors={setTreeAnchors} textScale={textScale} zoom={treeZoom} showBorder={showBorder} />}
               {generated && tab === "plist" && <PartsListDoc bom={bom} excluded={generated.excluded} tops={generated.tops} cfgName={generated.cfgName} m={m} purchased={generated.purchased || {}} profile={profile} customer={customer} />}
               {generated && tab === "trav" && <TravelerDocs bom={bom} excluded={generated.excluded} tops={generated.tops} m={m} profile={profile} espByPn={espByPn} customer={customer} />}
               {generated && tab === "wi" && <WIDocs bom={bom} excluded={generated.excluded} tops={generated.tops} m={m} profile={profile} espByPn={espByPn} customer={customer} />}
