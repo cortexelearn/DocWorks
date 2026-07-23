@@ -583,15 +583,33 @@ function scopedTree(bom, excluded, top) {
     walk(top, 0, null);
     return out;
 }
+/* ICG part-number conventions: AD-xxx are adhesives / consumables (epoxies, solder,
+   varnish, tape, cleaners). They are always COMPONENTS on the family tree even when the
+   BOM gives them sub-parts (e.g. a two-part epoxy with its hardener) — they never get an
+   assembly block. Their sub-parts are rolled up and listed beneath them. */
+const CONSUMABLE_RE = /^(AD)-/i;
+function isConsumablePN(pn) { return CONSUMABLE_RE.test(String(pn || "").trim()); }
+/* total number of printed lines in a node's component list (leaves + rolled-up sub-parts) */
+function nodeListLines(n) {
+    if (!n || !n.leafK)
+        return 0;
+    let c = 0;
+    for (const k of n.leafK)
+        c += 1 + ((k.rolled && k.rolled.length) || 0);
+    return c;
+}
 function buildOrder(bom, excluded, tops) {
     const seen = {}, order = [];
-    const isAsm = pn => !!(bom.children[pn] && bom.children[pn].length);
+    // consumables (AD-xxx adhesives/epoxies/solder) are materials, never made assemblies —
+    // they get no traveler and no ESP even when the BOM lists sub-parts under them.
+    const isAsm = pn => !isConsumablePN(pn) && !!(bom.children[pn] && bom.children[pn].length);
     function walk(pn) {
         if (excluded[pn] || seen[pn])
             return;
         seen[pn] = 1;
-        for (const k of (bom.children[pn] || []))
-            walk(k.pn);
+        if (!isConsumablePN(pn))
+            for (const k of (bom.children[pn] || []))
+                walk(k.pn);
         const p = bom.parts[pn];
         if (isAsm(pn) && p && /make/i.test(p.mb || "Make"))
             order.push(pn);
@@ -1498,13 +1516,17 @@ function layoutBulletTree(bom, excluded, top, D) {
     const CHARW = (D.bulletFont || 9.5) * 0.60; // approx mono/arial char width at bullet font
     function build(pn, row, depth, seen) {
         const cyc = seen.has(pn);
-        const kidRows = cyc ? [] : (bom.children[pn] || []).filter(k => !excluded[k.pn]);
+        const consumable = isConsumablePN(pn);
+        const own = (bom.children[pn] || []).filter(k => !excluded[k.pn]);
+        // a consumable is a component: it never expands into an assembly block
+        const kidRows = (cyc || consumable) ? [] : own;
         const ns = new Set(seen);
         ns.add(pn);
         const kids = kidRows.map(k => build(k.pn, k, depth + 1, ns));
         const asmK = kids.filter(k => k.kids.length);
         const leafK = kids.filter(k => !k.kids.length);
-        return { pn, row, depth, part: bom.parts[pn] || { pn, desc: "", rev: "-", mb: "" }, kids, asmK, leafK };
+        const rolled = consumable ? own.map(k => ({ pn: k.pn, qty: k.qty, uom: k.uom, desc: (bom.parts[k.pn] || {}).desc || k.desc || "" })) : [];
+        return { pn, row, depth, part: bom.parts[pn] || { pn, desc: "", rev: "-", mb: "" }, kids, asmK, leafK, rolled, consumable };
     }
     const root = build(top, null, 0, new Set());
     // estimate the pixel width a component list needs (longest line)
@@ -1517,6 +1539,10 @@ function layoutBulletTree(bom, excluded, top, D) {
             const qty = k.row ? k.row.qty : "1";
             const len = (k.pn + "  " + desc + "  (" + qty + ")").length;
             mx = Math.max(mx, len);
+            for (const r of (k.rolled || [])) {
+                const rl = 3 + (r.pn + "  " + String(r.desc || "").slice(0, compChars) + "  (" + (r.qty || "1") + ")").length;
+                mx = Math.max(mx, rl);
+            }
         }
         return 16 + mx * CHARW; // 16 = indent + rail
     };
@@ -1531,7 +1557,7 @@ function layoutBulletTree(bom, excluded, top, D) {
         return n.w;
     }
     width(root);
-    const compH = n => n.hasBullets ? (n.leafK.length * BLH + 10) : 0;
+    const compH = n => n.hasBullets ? (nodeListLines(n) * BLH + 10) : 0;
     // place: box sits at the LEFT of its lane (so its component list, also left-aligned,
     // stays within the lane). Parent box centers over the span of child box centers.
     function placeX(n, x) {
@@ -1712,7 +1738,7 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
         // obstacle rects for connector routing: every box and every component-list block
         const OBS = L.flat.map(n => {
             const x = PADX + (n.boxX != null ? n.boxX : n.x - NW / 2), y = PADY + n.y;
-            const listH = n.leafK && n.leafK.length ? n.leafK.length * BLH + 10 : 0;
+            const listH = n.leafK && n.leafK.length ? nodeListLines(n) * BLH + 10 : 0;
             return { pn: n.pn, box: { x, y, w: NW, h: NH }, list: listH ? { x: x + 2, y: y + NH + 4, w: Math.max(NW, n.compW || 0), h: listH } : null };
         });
         // ---- the printable drawing frame: a true 11x17 sheet region in layout units ----
@@ -1721,7 +1747,7 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
         for (const n of L.flat) {
             const nStart = bels.length;
             const bx0 = PADX + (n.boxX != null ? n.boxX : n.x - NW / 2), ny = PADY + n.y;
-            const nListH = n.leafK && n.leafK.length ? n.leafK.length * BLH + 10 : 0;
+            const nListH = n.leafK && n.leafK.length ? nodeListLines(n) * BLH + 10 : 0;
             const outside = bx0 < 0 || ny < 0 || (bx0 + Math.max(NW, n.compW || 0)) > FRAME_W || (ny + NH + nListH) > FRAME_H;
             if (outside)
                 offCount++;
@@ -1751,23 +1777,34 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
             // component list BELOW the box (left-aligned within this assembly's lane)
             if (n.hasBullets) {
                 const railX = bx0 + 3, by = ny + NH + 6;
-                bels.push(React.createElement("line", { key: "rail" + key, x1: railX, y1: by - 1, x2: railX, y2: by + n.leafK.length * BLH - 3, stroke: "#bbb", strokeWidth: .8 }));
+                const totalLines = nodeListLines(n);
+                bels.push(React.createElement("line", { key: "rail" + key, x1: railX, y1: by - 1, x2: railX, y2: by + totalLines * BLH - 3, stroke: "#bbb", strokeWidth: .8 }));
+                let li = 0;
                 n.leafK.forEach((k, i) => {
-                    const ly = by + i * BLH + 8;
+                    const ly = by + li * BLH + 8;
+                    li++;
                     bels.push(React.createElement("line", { key: "bl" + key + i, x1: railX, y1: ly - 3, x2: railX + 5, y2: ly - 3, stroke: "#bbb", strokeWidth: .8 }));
                     const qty = k.row ? k.row.qty : "1";
                     const label = k.pn + "  " + truncate(k.part.desc, compChars) + "  (" + qty + ")";
-                    const km = !k.kids.length && isAssemblyLike(k.part) && !purchased[k.pn];
+                    // consumables (AD-xxx) are never flagged as a missing assembly BOM
+                    const km = !k.kids.length && !k.consumable && isAssemblyLike(k.part) && !purchased[k.pn];
                     bels.push(React.createElement("text", { key: "bt" + key + i, x: railX + 9, y: ly, fontFamily: FONT, fontSize: fBullet, fontWeight: 500, fill: km ? "#B8860B" : "#1A1A1E" },
                         label,
                         km ? " ▲" : ""));
+                    // rolled-up sub-parts of a consumable (e.g. epoxy hardener) listed beneath it
+                    (k.rolled || []).forEach((r, ri) => {
+                        const ry = by + li * BLH + 8;
+                        li++;
+                        const rlabel = "› " + r.pn + "  " + truncate(r.desc, compChars) + "  (" + (r.qty || "1") + ")";
+                        bels.push(React.createElement("text", { key: "br" + key + i + "_" + ri, x: railX + 20, y: ry, fontFamily: FONT, fontSize: fBullet * 0.94, fontWeight: 400, fill: "#555" }, rlabel));
+                    });
                 });
             }
             // connector to sub-assemblies: each child routed independently with an orthogonal
             // path that leaves the parent from whichever SIDE faces the child (top/bottom/left/
             // right) and clears the parent's component list, so lines never cross text.
             if (n.asmK && n.asmK.length) {
-                const pList = n.hasBullets ? (n.leafK.length * BLH + 10) : 0;
+                const pList = n.hasBullets ? (nodeListLines(n) * BLH + 10) : 0;
                 const pRect = { x: bx0, y: ny, w: NW, h: NH };
                 const pContentBottom = ny + NH + pList;
                 const pContentRight = bx0 + Math.max(NW, n.compW || 0);
@@ -1802,7 +1839,7 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
         let minX = 0, minY = -20, maxX = (sheet.showBorder && D.oneSheet) ? Math.max(W, FRAME_W) : W, maxY = (sheet.showBorder && D.oneSheet) ? Math.max(H, FRAME_H) : H;
         for (const n of L.flat) {
             const bx = PADX + (n.boxX != null ? n.boxX : n.x - NW / 2), by = PADY + n.y;
-            const listH = n.hasBullets ? (n.leafK.length * BLH + 10) : 0;
+            const listH = n.hasBullets ? (nodeListLines(n) * BLH + 10) : 0;
             minX = Math.min(minX, bx - 14);
             minY = Math.min(minY, by - 14);
             maxX = Math.max(maxX, bx + Math.max(NW, n.compW || 0) + 14);
@@ -3704,7 +3741,7 @@ function DocWorks() {
                 React.createElement("button", { onClick: exportProject, title: "Save your working environment (BOM, edits, positions, settings) to a file", style: { background: "rgba(255,255,255,.12)", color: "#fff", border: "1px solid rgba(255,255,255,.35)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" } }, "\uD83D\uDCBE Save Project"),
                 React.createElement("button", { onClick: () => projFileRef.current && projFileRef.current.click(), title: "Load a saved working environment", style: { background: "rgba(255,255,255,.12)", color: "#fff", border: "1px solid rgba(255,255,255,.35)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" } }, "\uD83D\uDCC2 Load Project"),
                 React.createElement("button", { onClick: resetAll, title: "Clear everything back to an empty workspace", style: { background: "transparent", color: "#F2C14E", border: "1px solid rgba(242,193,78,.6)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" } }, "\u21BA Reset All"),
-                React.createElement("span", { style: { fontSize: 10.5, opacity: .55, fontFamily: MONO, marginLeft: 4 } }, "v0.25"))),
+                React.createElement("span", { style: { fontSize: 10.5, opacity: .55, fontFamily: MONO, marginLeft: 4 } }, "v0.26"))),
         React.createElement("div", { style: { display: "flex", flex: 1, minHeight: 0, flexWrap: "wrap" } },
             React.createElement("div", { style: { width: 400, minWidth: 310, flexShrink: 0, background: C.paper, borderRight: `1px solid ${C.line}`, padding: 16, overflowY: "auto", maxHeight: "calc(100vh - 46px)" } },
                 React.createElement("div", { style: { marginBottom: 18 } },
