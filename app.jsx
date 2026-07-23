@@ -2856,6 +2856,26 @@ function DocWorks() {
       arr.forEach(d => { if (!d.id || !d.match || !Array.isArray(d.ops)) throw new Error("each template needs id, match, ops[]"); });
       setCustomDecls(arr); setCustomTemplates(arr); setGenerated(null); setCheck(null);
     } catch (e) { alert("Template import failed: " + e.message); } }; rd.readAsText(f); };
+  // ---- Global reset + empty start ----
+  const EMPTY_META = { wo: "", sn: "", prog: "Sample Program", rev: "1", eco: "ECO-0001", change: "INITIAL RELEASE (GENERATED)" };
+  const clearWorkspace = (keepProfile) => {
+    // clear every piece of working state back to a clean slate
+    setExcluded({}); setPurchased({}); setManualTop(""); setActiveCfg("actuator");
+    setGenerated(null); setCheck(null); setEditMode(false); setTreeNudges({});
+    setEspByPn({}); setCustomerOverride(""); setWo(""); setSn("");
+    setRev("1"); setEco("ECO-0001"); setChange("INITIAL RELEASE (GENERATED)");
+    setCustomDecls([]); setCustomTemplates([]);
+    setTab("tree"); setShowEditor(false);
+    setImportKey(k => k + 1); // remount ImportPanel to clear its internal queue/paste/stage state
+    if (!keepProfile) { setProfile("island"); setSheetSize("tabloid"); }
+  };
+  const resetAll = () => {
+    if (!window.confirm("Reset DocWorks? This clears the current BOM, all edits, generated documents, dragged positions, ESP/customer entries, and custom templates. Export your project first if you want to keep it.")) return;
+    clearWorkspace(false);
+    setBom(buildBOM([], [])); setSrcLabel("(empty)");
+  };
+  const loadSample = () => { clearWorkspace(false); setBom(parseCsvBOM(SAMPLE)); setSrcLabel("EZ Motors sample"); setProfile("ez"); setSheetSize("letter"); };
+  const startEmpty = () => { clearWorkspace(false); setBom(buildBOM([], [])); setSrcLabel("(empty)"); };
   const [prog, setProg] = useState("Sample Program");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [tab, setTab] = useState("tree");
@@ -2864,6 +2884,8 @@ function DocWorks() {
   const [profile, setProfile] = useState("island"); // output profile: ez | island
   const [sheetSize, setSheetSize] = useState("tabloid"); // letter (multi-sheet) | tabloid (11x17 one sheet)
   const [editMode, setEditMode] = useState(false);
+  const [importKey, setImportKey] = useState(0);
+  const [paneDrop, setPaneDrop] = useState(false);
   const [treeNudges, setTreeNudges] = useState({}); // pn -> {dx,dy} manual drag offsets for family tree
   const [exportDirName, setExportDirName] = useState("");
   const [exportMsg, setExportMsg] = useState("");
@@ -2929,10 +2951,6 @@ function DocWorks() {
     setGenerated(null); setExcluded({}); setManualTop("");
     if (!merge) setPurchased({});
   }
-  function loadSample() {
-    setBom(parseCsvBOM(SAMPLE)); setSrcLabel("EZ Motors sample");
-    setGenerated(null); setExcluded({}); setManualTop(""); setPurchased({});
-  }
   function doGenerate() {
     const tops = (cfgTops && cfgTops.length) ? cfgTops : (manualTop ? [manualTop] : []);
     if (!tops.length) return;
@@ -2954,7 +2972,15 @@ function DocWorks() {
       <div style={{ background: C.navy, color: "#fff", padding: "10px 18px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <div style={{ fontWeight: 800, letterSpacing: ".12em", fontSize: 16 }}>DOC<span style={{ color: "#F2C14E" }}>WORKS</span></div>
         <div style={{ opacity: .75, fontSize: 11.5, borderLeft: "1px solid rgba(255,255,255,.3)", paddingLeft: 14 }}>BOM / drawing import → Family Tree · Parts List · Traveler · Work Instruction | 100% local</div>
-        <div style={{ marginLeft: "auto", fontSize: 10.5, opacity: .65, fontFamily: MONO }}>v0.20 PROTOTYPE</div>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+          <button onClick={exportProject} title="Save your working environment (BOM, edits, positions, settings) to a file"
+            style={{ background: "rgba(255,255,255,.12)", color: "#fff", border: "1px solid rgba(255,255,255,.35)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" }}>💾 Save Project</button>
+          <button onClick={() => projFileRef.current && projFileRef.current.click()} title="Load a saved working environment"
+            style={{ background: "rgba(255,255,255,.12)", color: "#fff", border: "1px solid rgba(255,255,255,.35)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" }}>📂 Load Project</button>
+          <button onClick={resetAll} title="Clear everything back to an empty workspace"
+            style={{ background: "transparent", color: "#F2C14E", border: "1px solid rgba(242,193,78,.6)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" }}>↺ Reset All</button>
+          <span style={{ fontSize: 10.5, opacity: .55, fontFamily: MONO, marginLeft: 4 }}>v0.21</span>
+        </div>
       </div>
 
       <div style={{ display: "flex", flex: 1, minHeight: 0, flexWrap: "wrap" }}>
@@ -2967,9 +2993,10 @@ function DocWorks() {
               <div style={stepNum}>1</div><div style={stepH}>Bill of Materials</div>
             </div>
             <div style={{ borderLeft: `2px solid ${C.line}`, marginLeft: 11, paddingLeft: 20 }}>
-              <ImportPanel onCommit={handleImport} existingCount={bom ? bom.rows.length : 0} llmCfg={{ url: llmUrl, model: llmModel }} />
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button style={btn} onClick={loadSample}>Reset to sample</button>
+              <ImportPanel key={importKey} onCommit={handleImport} existingCount={bom ? bom.rows.length : 0} llmCfg={{ url: llmUrl, model: llmModel }} />
+              <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                <button style={btn} onClick={loadSample}>Load sample BOM</button>
+                <button style={{ ...btn, color: "#777" }} onClick={startEmpty}>Start empty</button>
               </div>
               {bom && (
                 <div style={{ marginTop: 10, fontSize: 11.5 }}>
@@ -3232,11 +3259,25 @@ function DocWorks() {
               {exportMsg && <span style={{ fontSize: 11, fontWeight: 700, color: exportMsg.includes("failed") || exportMsg.includes("needs") ? "#B03A00" : "#2E6B3E" }}>{exportMsg}</span>}
             </div>
           )}
-          <div style={{ overflowY: "auto", padding: 22, display: "flex", flexDirection: "column", alignItems: "center", gap: 14, flex: 1 }}>
+          <div style={{ overflowY: "auto", padding: 22, display: "flex", flexDirection: "column", alignItems: "center", gap: 14, flex: 1, position: "relative", outline: paneDrop ? `3px dashed ${C.navy2}` : "none", outlineOffset: -6 }}
+            onDragOver={e => { if ([...(e.dataTransfer.items || [])].some(it => it.kind === "file")) { e.preventDefault(); setPaneDrop(true); } }}
+            onDragLeave={e => { if (e.currentTarget === e.target) setPaneDrop(false); }}
+            onDrop={e => {
+              e.preventDefault(); setPaneDrop(false);
+              const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (!f) return;
+              if (/\.json$/i.test(f.name)) { importProject(f); }
+              else { setExportMsg("Drop a DocWorks Project (.json) here to reload it for editing. To start from a BOM or drawing, use the import panel on the left."); setTimeout(() => setExportMsg(""), 6000); }
+            }}>
+            {paneDrop && (
+              <div style={{ position: "absolute", inset: 6, background: "rgba(46,83,149,.06)", border: `2px dashed ${C.navy2}`, borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", zIndex: 5, fontSize: 15, color: C.navy, fontWeight: 700 }}>
+                Drop a DocWorks Project (.json) to load it for editing
+              </div>
+            )}
             {!generated && (
               <div style={{ color: "#999", textAlign: "center", padding: "80px 20px", fontSize: 13 }}>
                 <div style={{ fontSize: 38, marginBottom: 10, opacity: .4 }}>⬡</div>
-                Drop a BOM (Excel/CSV), paste from a PDF, or use the sample.<br />Then choose what you're building and generate.
+                Drop a BOM (Excel/CSV) or drawing PDF in the panel at left, or use the sample.<br />Then choose what you're building and generate.
+                <div style={{ marginTop: 14, fontSize: 12, color: "#aaa" }}>Editing an existing job? Drag its saved <b>DocWorks Project (.json)</b> right here to reload and edit it.</div>
               </div>
             )}
             {/* check panel lives OUTSIDE the exportable docsRef so it never appears in exports */}
