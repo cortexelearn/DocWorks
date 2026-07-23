@@ -1378,7 +1378,7 @@ function DocHeader({ title, docNo, pn, extra, m, company }) {
 function Sheet({ children, wide, fixed }) {
     // `fixed` renders a true page-shaped canvas (e.g. 11x17) so what you see is what prints
     const st = fixed
-        ? { background: "#fff", width: fixed.w, height: fixed.h, minWidth: fixed.w, boxShadow: "0 2px 14px rgba(0,0,0,.13)", padding: 14, fontSize: 12.5, lineHeight: 1.35, boxSizing: "border-box", display: "flex", flexDirection: "column" }
+        ? { background: "#fff", width: fixed.w, height: fixed.h, minWidth: fixed.w, boxShadow: "0 2px 14px rgba(0,0,0,.13)", padding: 12, fontSize: 12.5, lineHeight: 1.35, boxSizing: "border-box", display: "flex", flexDirection: "column", border: "2.5px solid #111", outline: "1px solid #111", outlineOffset: 3 }
         : { background: "#fff", width: "100%", maxWidth: wide ? 1360 : 850, boxShadow: "0 2px 14px rgba(0,0,0,.13)", padding: wide ? "24px 28px" : "30px 34px", fontSize: 12.5, lineHeight: 1.45, boxSizing: "border-box" };
     return React.createElement("div", { className: "dw-sheet", style: st }, children);
 }
@@ -1859,10 +1859,7 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
         // engineering sheet, so it can't be confused with the edit-mode highlight.
         // The sheet's own drawing-box edge is the 11x17 border, so no in-SVG frame is drawn.
         // An optional light guide marks the auto-layout extent when the toggle is on.
-        const border = [];
-        if (sheet.showBorder && D.oneSheet) {
-            border.push(React.createElement("rect", { key: "pa", x: 0, y: 0, width: FRAME_W, height: FRAME_H, fill: "none", stroke: "#9AA7BD", strokeWidth: 1, strokeDasharray: "9 7", opacity: .7 }));
-        }
+        const border = []; // the sheet's own drawing border frames the page; no in-SVG frame
         const z = sheet.zoom || 1;
         if (D.oneSheet) {
             // The sheet is a fixed 11x17 canvas: the drawing fills it exactly and the zoom
@@ -2120,22 +2117,21 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer
                     React.createElement("div", { style: { ...tbC, fontFamily: MONO } }, r[1]),
                     React.createElement("div", { style: { ...tbC, borderRight: "none", textAlign: "center", fontWeight: i === 0 ? 700 : 400 } }, r[2]))))))),
         React.createElement("div", { className: "noprint", style: { display: oneSheet ? "none" : "flex", justifyContent: "flex-end", marginBottom: 4, gap: 6 } },
-            React.createElement("span", { style: { fontSize: 10, color: "#999", alignSelf: "center" } }, oneSheet ? "Large-format sheet — use Actual size for legibility, Fit width for overview" : ""),
+            React.createElement("span", { style: { fontSize: 10, color: "#999", alignSelf: "center" } }),
             React.createElement("span", { style: { display: "inline-flex", gap: 3, alignItems: "center" } },
                 React.createElement("span", { style: { fontSize: 10, color: "#999" } }, "View:"),
                 [[false, "Actual size"], [true, "Fit width"]].map(([v, lbl]) => (React.createElement("button", { key: lbl, onClick: () => setFit(v), style: { border: `1px solid ${fit === v ? C.navy : C.line}`, background: fit === v ? C.navy : "#fff", color: fit === v ? "#fff" : "#666", fontSize: 10, fontWeight: fit === v ? 700 : 400, padding: "3px 8px", cursor: "pointer", borderRadius: 2 } }, lbl))))),
         allSheets.map(sh => {
             const d = SheetDrawing({ bom, sheet: sh, purchased, fit, qaField: P.qaField });
             const shTop = bom.parts[sh.top] || {};
-            return (React.createElement("div", { key: sh.sheetNo, style: { border: oneSheet ? "2px solid #111" : "1px solid #111", marginBottom: oneSheet ? 4 : 10, background: "#fff", breakInside: "avoid", pageBreakInside: "avoid", flex: oneSheet ? "1 1 auto" : "0 0 auto", minHeight: 0, display: oneSheet ? "flex" : "block", flexDirection: "column" } },
+            return (React.createElement("div", { key: sh.sheetNo, style: { border: "1px solid #111", marginBottom: oneSheet ? 4 : 10, background: "#fff", breakInside: "avoid", pageBreakInside: "avoid", flex: oneSheet ? "1 1 auto" : "0 0 auto", minHeight: 0, display: oneSheet ? "flex" : "block", flexDirection: "column" } },
                 React.createElement("div", { style: { borderBottom: "1px solid #111", padding: "3px 8px", fontSize: 9, display: "flex", justifyContent: "space-between", background: "#FAFAF8", flex: "0 0 auto" } },
                     React.createElement("span", { style: { fontWeight: 700 } },
                         "SHEET ",
                         sh.sheetNo,
                         " OF ",
                         nSheets,
-                        sh.sheetNo > 1 ? ` — SUBASSEMBLY: ${sh.top}` : "",
-                        oneSheet ? " — 11×17 (what you see is what prints)" : ""),
+                        sh.sheetNo > 1 ? ` — SUBASSEMBLY: ${sh.top}` : ""),
                     React.createElement("span", { style: { fontFamily: MONO, color: "#666" } }, sh.sheetNo === 1 ? tops.join(" + ") : (shTop.desc || "").toUpperCase())),
                 React.createElement("div", { className: "dw-drawbox", style: oneSheet
                         ? { flex: "1 1 auto", minHeight: 0, overflow: "hidden", position: "relative", background: "#fff" }
@@ -3445,12 +3441,13 @@ async function exportPaneAsPDF(paneEl, title, pageSize) {
   @page { size: ${sizeCSS}; margin: 0.4in; }
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
   body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; background: #fff; }
-  .dw-sheet { max-width: 100% !important; width: 100% !important; box-shadow: none !important; margin: 0 auto !important; padding: 0 !important; break-inside: avoid-page; }
+  .dw-sheet { box-shadow: none !important; margin: 0 auto !important; break-inside: avoid-page; }
+  ${isTab ? "" : ".dw-sheet { max-width: 100% !important; width: 100% !important; padding: 0 !important; }"}
   .dw-sheet + .dw-sheet { break-before: ${isTab ? "auto" : "page"}; page-break-before: ${isTab ? "auto" : "always"}; }
   table { width: 100% !important; max-width: 100% !important; table-layout: fixed; border-collapse: collapse; }
   td, th { overflow-wrap: break-word; word-break: break-word; }
-  svg { max-width: 100% !important; height: auto !important; }
-  ${isTab ? ".dw-drawbox, .dw-drawwrap { width: 100% !important; min-width: 0 !important; overflow: visible !important; } .dw-drawwrap > svg, .dw-sheet svg { width: 100% !important; } .noprint { display: none !important; }" : ""}
+  ${isTab ? "" : "svg { max-width: 100% !important; height: auto !important; }"}
+  .noprint { display: none !important; }
   .dw-offframe { display: none !important; }   /* content outside the sheet border does not print */
   @media print { .noprint { display: none !important; } }
   .barp { position: fixed; top: 0; left: 0; right: 0; background: #1F3864; color: #fff; padding: 10px 16px; font: 13px Segoe UI, Arial; z-index: 99; display: flex; gap: 12px; align-items: center; }
@@ -3458,17 +3455,21 @@ async function exportPaneAsPDF(paneEl, title, pageSize) {
   @media screen { #fitwrap { margin: 62px auto 20px; box-shadow: 0 2px 16px rgba(0,0,0,.2); } body { background: #eee; } }
 </style></head><body>
 <div class="barp noprint"><b>DocWorks — Print to PDF</b><button onclick="window.print()">🖨 Print / Save as PDF</button><span style="font-weight:400;font-size:12px">Choose "Save as PDF" — each assembly document starts on its own page. Destination${pageSize !== "letter" ? ' and set paper to <b>Tabloid / 11×17</b> ' + (landscape ? "Landscape" : "Portrait") : ""}.</span></div>
-<div id="fitwrap" style="overflow:hidden;background:#fff"><div id="fitinner" style="width:${availW}px;transform-origin:top left">${html}</div></div>
+<div id="fitwrap" style="overflow:hidden;background:#fff"><div id="fitinner" style="${isTab ? "" : `width:${availW}px;`}transform-origin:top left;display:inline-block">${html}</div></div>
 <script>
 (function(){
   var AW=${availW}, AH=${availH}, TAB=${isTab ? "true" : "false"};
   function fit(){
     var wrap=document.getElementById('fitwrap'), inner=document.getElementById('fitinner');
     if(!wrap||!inner) return;
-    if(!TAB){ wrap.style.width=AW+'px'; return; }   // letter: natural flow, page-per-sheet
-    var h=inner.scrollHeight, k=Math.min(1, AH/h);
+    if(!TAB){ inner.style.width=AW+'px'; wrap.style.width=AW+'px'; return; }  // letter: page-per-sheet
+    // Size C canvas: keep the sheet exactly as designed, scale it to fill the page
+    var sheet=inner.querySelector('.dw-sheet');
+    var w=sheet?sheet.offsetWidth:inner.scrollWidth, h=sheet?sheet.offsetHeight:inner.scrollHeight;
+    var k=Math.min(AW/w, AH/h);
+    inner.style.width=w+'px';
     inner.style.transform='scale('+k+')';
-    wrap.style.width=Math.ceil(AW*k)+'px';
+    wrap.style.width=Math.ceil(w*k)+'px';
     wrap.style.height=Math.ceil(h*k)+'px';
   }
   if(document.readyState==='complete') fit(); else window.addEventListener('load',fit);
@@ -3755,7 +3756,7 @@ function DocWorks() {
                 React.createElement("button", { onClick: exportProject, title: "Save your working environment (BOM, edits, positions, settings) to a file", style: { background: "rgba(255,255,255,.12)", color: "#fff", border: "1px solid rgba(255,255,255,.35)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" } }, "\uD83D\uDCBE Save Project"),
                 React.createElement("button", { onClick: () => projFileRef.current && projFileRef.current.click(), title: "Load a saved working environment", style: { background: "rgba(255,255,255,.12)", color: "#fff", border: "1px solid rgba(255,255,255,.35)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" } }, "\uD83D\uDCC2 Load Project"),
                 React.createElement("button", { onClick: resetAll, title: "Clear everything back to an empty workspace", style: { background: "transparent", color: "#F2C14E", border: "1px solid rgba(242,193,78,.6)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" } }, "\u21BA Reset All"),
-                React.createElement("span", { style: { fontSize: 10.5, opacity: .55, fontFamily: MONO, marginLeft: 4 } }, "v0.28"))),
+                React.createElement("span", { style: { fontSize: 10.5, opacity: .55, fontFamily: MONO, marginLeft: 4 } }, "v0.29"))),
         React.createElement("div", { style: { display: "flex", flex: 1, minHeight: 0, flexWrap: "wrap" } },
             React.createElement("div", { style: { width: 400, minWidth: 310, flexShrink: 0, background: C.paper, borderRight: `1px solid ${C.line}`, padding: 16, overflowY: "auto", maxHeight: "calc(100vh - 46px)" } },
                 React.createElement("div", { style: { marginBottom: 18 } },
@@ -4006,7 +4007,7 @@ function DocWorks() {
                         exportDirName ? "Folder: " + exportDirName : "Set export folder…"),
                     tab === "tree" && (React.createElement("span", { style: { display: "inline-flex", alignItems: "center", gap: 4, marginLeft: 4 } },
                         React.createElement("span", { style: { fontSize: 10, color: "#777" } }, "Sheet:"),
-                        [["letter", "Letter (multi-sheet)"], ["tabloid", "11×17 (one sheet)"]].map(([id, lbl]) => (React.createElement("button", { key: id, onClick: () => setSheetSize(id), style: { border: `1px solid ${sheetSize === id ? C.navy : C.line}`, background: sheetSize === id ? C.navy : "#fff", color: sheetSize === id ? "#fff" : "#555", padding: "3px 8px", fontSize: 10.5, fontWeight: sheetSize === id ? 700 : 400, borderRadius: 2, cursor: "pointer" } }, lbl))))),
+                        [["letter", "Letter (multi-sheet)"], ["tabloid", "Size C (11×17)"]].map(([id, lbl]) => (React.createElement("button", { key: id, onClick: () => setSheetSize(id), style: { border: `1px solid ${sheetSize === id ? C.navy : C.line}`, background: sheetSize === id ? C.navy : "#fff", color: sheetSize === id ? "#fff" : "#555", padding: "3px 8px", fontSize: 10.5, fontWeight: sheetSize === id ? 700 : 400, borderRadius: 2, cursor: "pointer" } }, lbl))))),
                     tab === "tree" && sheetSize === "tabloid" && (React.createElement("span", { style: { display: "inline-flex", alignItems: "center", gap: 8, marginLeft: 4, paddingLeft: 8, borderLeft: `1px solid ${C.line}` } },
                         [["Assy", "asm"], ["Comp", "comp"]].map(([lbl, k]) => (React.createElement("span", { key: k, style: { display: "inline-flex", alignItems: "center", gap: 2 } },
                             React.createElement("span", { style: { fontSize: 10, color: "#777" } },
@@ -4025,14 +4026,14 @@ function DocWorks() {
                                 "%"),
                             React.createElement("button", { onClick: () => setTreeZoom(z => Math.min(3, +(z + 0.1).toFixed(2))), style: miniBtn }, "+"),
                             React.createElement("button", { onClick: () => setTreeZoom(1), style: { ...miniBtn, width: "auto", padding: "1px 6px" } }, "1:1")),
-                        React.createElement("button", { onClick: () => setShowBorder(v => !v), style: { border: `1px solid ${showBorder ? "#B03A00" : C.line}`, background: showBorder ? "#FBE4D5" : "#fff", color: showBorder ? "#B03A00" : "#666", padding: "3px 8px", fontSize: 10, fontWeight: showBorder ? 700 : 400, borderRadius: 2, cursor: "pointer" } }, "\u2B1A 11\u00D717 border"))),
+                        React.createElement("button", { onClick: () => setShowBorder(v => !v), style: { border: `1px solid ${showBorder ? "#B03A00" : C.line}`, background: showBorder ? "#FBE4D5" : "#fff", color: showBorder ? "#B03A00" : "#666", padding: "3px 8px", fontSize: 10, fontWeight: showBorder ? 700 : 400, borderRadius: 2, cursor: "pointer" } }, "\u2B1A Sheet border"))),
                     tab === "tree" && sheetSize === "tabloid" && editMode && (React.createElement("span", { style: { display: "inline-flex", alignItems: "center", gap: 6, marginLeft: 4 } },
                         React.createElement("span", { style: { fontSize: 10, color: "#8A6D00", fontWeight: 700 } }, "\u270B Drag boxes to reposition \u00B7 right-click a box to set which side lines attach"),
                         (Object.keys(treeNudges).length > 0 || Object.keys(treeAnchors).length > 0) && (React.createElement("button", { onClick: () => { setTreeNudges({}); setTreeAnchors({}); setTextScale({ asm: 1, comp: 1 }); setTreeZoom(1); setShowBorder(true); setTreeFit(false); }, style: { border: `1px solid ${C.line}`, background: "#fff", color: "#555", padding: "3px 8px", fontSize: 10, borderRadius: 2, cursor: "pointer" } },
                             "\u21BA Reset layout (",
                             Object.keys(treeNudges).length + Object.keys(treeAnchors).length,
                             ")")))),
-                    tab === "tree" && sheetSize !== "tabloid" && editMode && React.createElement("span", { style: { fontSize: 10, color: "#999" } }, "Switch to 11\u00D717 to drag-reposition boxes"),
+                    tab === "tree" && sheetSize !== "tabloid" && editMode && React.createElement("span", { style: { fontSize: 10, color: "#999" } }, "Switch to Size C to drag-reposition boxes"),
                     editMode && tab !== "tree" && React.createElement("span", { style: { fontSize: 10, color: "#8A6D00" } }, "Edits persist until you regenerate \u2014 exports capture your edits."),
                     exportMsg && React.createElement("span", { style: { fontSize: 11, fontWeight: 700, color: exportMsg.includes("failed") || exportMsg.includes("needs") ? "#B03A00" : "#2E6B3E" } }, exportMsg))),
                 React.createElement("div", { style: { overflowY: "auto", padding: 22, display: "flex", flexDirection: "column", alignItems: "center", gap: 14, flex: 1, position: "relative", outline: paneDrop ? `3px dashed ${C.navy2}` : "none", outlineOffset: -6 }, onDragOver: e => { if ([...(e.dataTransfer.items || [])].some(it => it.kind === "file")) {
