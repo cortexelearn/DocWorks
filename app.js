@@ -1715,17 +1715,35 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
             const listH = n.leafK && n.leafK.length ? n.leafK.length * BLH + 10 : 0;
             return { pn: n.pn, box: { x, y, w: NW, h: NH }, list: listH ? { x: x + 2, y: y + NH + 4, w: Math.max(NW, n.compW || 0), h: listH } : null };
         });
+        // ---- the printable drawing frame: a true 11x17 sheet region in layout units ----
+        const FRAME_W = W, FRAME_H = H;
+        let offCount = 0;
         for (const n of L.flat) {
+            const nStart = bels.length;
             const bx0 = PADX + (n.boxX != null ? n.boxX : n.x - NW / 2), ny = PADY + n.y;
+            const nListH = n.leafK && n.leafK.length ? n.leafK.length * BLH + 10 : 0;
+            const outside = bx0 < 0 || ny < 0 || (bx0 + Math.max(NW, n.compW || 0)) > FRAME_W || (ny + NH + nListH) > FRAME_H;
+            if (outside)
+                offCount++;
             const isTop = n.depth === 0;
             const missing = !n.kids.length && isAssemblyLike(n.part) && !purchased[n.pn];
             const isPurch = !n.kids.length && isAssemblyLike(n.part) && purchased[n.pn];
             const key = n.pn + "_" + n.depth + "_" + Math.round(n.x);
             // assembly box
             bels.push(React.createElement("rect", { key: "b" + key, x: bx0, y: ny, width: NW, height: NH, rx: 3, "data-pn": n.pn, className: sheet.editable ? "dw-draggable" : undefined, fill: missing ? "#FFF9E8" : isTop ? "#EEF3FB" : "#fff", stroke: missing ? "#B8860B" : isTop ? C.navy : C.navy2, strokeWidth: isTop ? 2.2 : 1.5, strokeDasharray: missing ? "5 3" : "none", style: sheet.editable ? { cursor: "grab" } : undefined }));
-            bels.push(React.createElement("text", { key: "p" + key, x: bx0 + NW / 2, y: ny + 15, textAnchor: "middle", fontFamily: FONT, fontSize: fPN, fontWeight: 800, fill: isTop ? C.navy : C.navy2 }, n.pn));
-            wrapText(n.part.desc, dChars, 2).forEach((l, li) => bels.push(React.createElement("text", { key: "d" + key + li, x: bx0 + NW / 2, y: ny + 26 + li * 9, textAnchor: "middle", fontFamily: FONT, fontSize: fD, fontWeight: 600, fill: "#333" }, l)));
-            bels.push(React.createElement("text", { key: "q" + key, x: bx0 + NW / 2, y: ny + NH - 5, textAnchor: "middle", fontFamily: FONT, fontSize: fQ, fontWeight: 700, fill: "#111" }, "QTY: " + (n.row ? n.row.qty : "1")));
+            // text block laid out from the font metrics so PN / description / qty never collide,
+            // and the description sits centred in the space between them at any text size.
+            const padT = Math.max(3, fPN * 0.35);
+            const pnBase = ny + padT + fPN; // PN baseline
+            const dLH = fD * 1.28; // description line height
+            const qtyBase = ny + NH - Math.max(3, fQ * 0.4); // qty baseline (bottom)
+            const descLines = wrapText(n.part.desc, dChars, 2);
+            const descBlockH = descLines.length * dLH;
+            const gapTop = pnBase + fD * 0.4, gapBot = qtyBase - fQ * 1.05;
+            const descTop = gapTop + Math.max(0, ((gapBot - gapTop) - descBlockH) / 2); // centred
+            bels.push(React.createElement("text", { key: "p" + key, x: bx0 + NW / 2, y: pnBase, textAnchor: "middle", fontFamily: FONT, fontSize: fPN, fontWeight: 800, fill: isTop ? C.navy : C.navy2 }, n.pn));
+            descLines.forEach((l, li) => bels.push(React.createElement("text", { key: "d" + key + li, x: bx0 + NW / 2, y: descTop + dLH * (li + 0.8), textAnchor: "middle", fontFamily: FONT, fontSize: fD, fontWeight: 600, fill: "#333" }, l)));
+            bels.push(React.createElement("text", { key: "q" + key, x: bx0 + NW / 2, y: qtyBase, textAnchor: "middle", fontFamily: FONT, fontSize: fQ, fontWeight: 700, fill: "#111" }, "QTY: " + (n.row ? n.row.qty : "1")));
             if (missing)
                 bels.push(React.createElement("text", { key: "m" + key, x: bx0 + NW / 2, y: ny + NH + 9, textAnchor: "middle", fontFamily: FONT, fontSize: 7, fontWeight: 700, fill: "#B8860B" }, "\u25B2 NO BOM"));
             if (isPurch)
@@ -1774,10 +1792,14 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
                     bels.push(React.createElement("path", { key: "ar" + key + k.pn, d: `M${last[0]} ${last[1]} L${last[0] - ux * s - uy * s * 0.6} ${last[1] - uy * s + ux * s * 0.6} L${last[0] - ux * s + uy * s * 0.6} ${last[1] - uy * s - ux * s * 0.6} Z`, fill: C.navy }));
                 });
             }
+            if (outside) {
+                const slice = bels.splice(nStart);
+                bels.push(React.createElement("g", { key: "off" + key, className: "dw-offframe", opacity: 0.3 }, slice));
+            }
         }
         // expand the drawing bounds to include every node — including boxes dragged outside
         // the original layout area — so nothing becomes unreachable off-canvas.
-        let minX = 0, minY = 0, maxX = W, maxY = H;
+        let minX = 0, minY = -20, maxX = (sheet.showBorder && D.oneSheet) ? Math.max(W, FRAME_W) : W, maxY = (sheet.showBorder && D.oneSheet) ? Math.max(H, FRAME_H) : H;
         for (const n of L.flat) {
             const bx = PADX + (n.boxX != null ? n.boxX : n.x - NW / 2), by = PADY + n.y;
             const listH = n.hasBullets ? (n.leafK.length * BLH + 10) : 0;
@@ -1790,10 +1812,20 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
         const cap = D.usableW;
         // firm sheet boundary: W/H are the ORIGINAL layout bounds = what fits the 11x17 sheet.
         // Anything dragged outside this rect will not print on the single sheet.
+        // Drawing border = the true 11x17 printable region. Solid double rule like a real
+        // engineering sheet, so it can't be confused with the edit-mode highlight.
         const border = [];
         if (sheet.showBorder && D.oneSheet) {
-            border.push(React.createElement("rect", { key: "pa", x: 0, y: 0, width: W, height: H, fill: "none", stroke: "#B03A00", strokeWidth: 1.6, strokeDasharray: "12 7", opacity: .85 }));
-            border.push(React.createElement("text", { key: "pal", x: 4, y: -7, fontFamily: '"Arial",sans-serif', fontSize: 11, fontWeight: 700, fill: "#B03A00" }, "11\u00D717 SHEET \u2014 content outside this border will not print"));
+            border.push(React.createElement("rect", { key: "pa", x: 0, y: 0, width: FRAME_W, height: FRAME_H, fill: "none", stroke: "#1F3864", strokeWidth: 2.2 }));
+            border.push(React.createElement("rect", { key: "pa2", x: 5, y: 5, width: FRAME_W - 10, height: FRAME_H - 10, fill: "none", stroke: "#1F3864", strokeWidth: 0.8, opacity: .55 }));
+            border.push(React.createElement("text", { key: "pal", x: 9, y: -8, fontFamily: '"Arial",sans-serif', fontSize: 11, fontWeight: 700, fill: "#1F3864" }, "11\u00D717 SHEET BORDER \u2014 only content inside this frame prints"));
+            if (offCount)
+                border.push(React.createElement("text", { key: "palw", x: FRAME_W - 9, y: -8, textAnchor: "end", fontFamily: '"Arial",sans-serif', fontSize: 11, fontWeight: 700, fill: "#B03A00" },
+                    "\u26A0 ",
+                    offCount,
+                    " item",
+                    offCount > 1 ? "s" : "",
+                    " outside the sheet \u2014 will not print"));
         }
         const z = sheet.zoom || 1;
         const svg = React.createElement("svg", { viewBox: `${minX} ${minY} ${vbW} ${vbH}`, preserveAspectRatio: "xMidYMid meet", style: fit ? { width: Math.min(vbW, cap), maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" }
@@ -1971,7 +2003,11 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer
     const D = (() => {
         const b = sheetDims(sheetSize || "letter");
         return { ...b,
-            NW: Math.round(b.NW * tA), NH: Math.round(b.NH * tA),
+            NW: Math.round(b.NW * tA),
+            // box height derived from the actual text stack so nothing ever overlaps
+            NH: Math.round(Math.max(b.NH * tA, Math.max(3, b.fontPN * tA * 0.35) + b.fontPN * tA
+                + 2 * ((b.oneSheet ? 7.5 : 7.2) * tA * 1.28)
+                + 8 * tA * 1.05 + Math.max(3, 8 * tA * 0.4) + 4)),
             fontPN: b.fontPN * tA, descFont: (b.oneSheet ? 7.5 : 7.2) * tA, qtyFont: 8 * tA,
             bulletFont: (b.bulletFont || 9.5) * tC, bulletLH: Math.round((b.bulletLH || 12) * tC),
         };
@@ -3371,6 +3407,7 @@ async function exportPaneAsPDF(paneEl, title, pageSize) {
   table { width: 100% !important; max-width: 100% !important; table-layout: fixed; border-collapse: collapse; }
   td, th { overflow-wrap: break-word; word-break: break-word; }
   svg { max-width: 100% !important; height: auto !important; }
+  .dw-offframe { display: none !important; }   /* content outside the sheet border does not print */
   @media print { .noprint { display: none !important; } }
   .barp { position: fixed; top: 0; left: 0; right: 0; background: #1F3864; color: #fff; padding: 10px 16px; font: 13px Segoe UI, Arial; z-index: 99; display: flex; gap: 12px; align-items: center; }
   .barp button { background: #fff; color: #1F3864; border: none; padding: 6px 14px; font-weight: 700; border-radius: 3px; cursor: pointer; }
@@ -3667,7 +3704,7 @@ function DocWorks() {
                 React.createElement("button", { onClick: exportProject, title: "Save your working environment (BOM, edits, positions, settings) to a file", style: { background: "rgba(255,255,255,.12)", color: "#fff", border: "1px solid rgba(255,255,255,.35)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" } }, "\uD83D\uDCBE Save Project"),
                 React.createElement("button", { onClick: () => projFileRef.current && projFileRef.current.click(), title: "Load a saved working environment", style: { background: "rgba(255,255,255,.12)", color: "#fff", border: "1px solid rgba(255,255,255,.35)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" } }, "\uD83D\uDCC2 Load Project"),
                 React.createElement("button", { onClick: resetAll, title: "Clear everything back to an empty workspace", style: { background: "transparent", color: "#F2C14E", border: "1px solid rgba(242,193,78,.6)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" } }, "\u21BA Reset All"),
-                React.createElement("span", { style: { fontSize: 10.5, opacity: .55, fontFamily: MONO, marginLeft: 4 } }, "v0.24"))),
+                React.createElement("span", { style: { fontSize: 10.5, opacity: .55, fontFamily: MONO, marginLeft: 4 } }, "v0.25"))),
         React.createElement("div", { style: { display: "flex", flex: 1, minHeight: 0, flexWrap: "wrap" } },
             React.createElement("div", { style: { width: 400, minWidth: 310, flexShrink: 0, background: C.paper, borderRight: `1px solid ${C.line}`, padding: 16, overflowY: "auto", maxHeight: "calc(100vh - 46px)" } },
                 React.createElement("div", { style: { marginBottom: 18 } },
@@ -3994,7 +4031,7 @@ function DocWorks() {
                         check.info.map((x, i) => React.createElement("div", { key: "i" + i, style: { color: "#666", marginTop: 3 } },
                             "\u00B7 ",
                             x)))))),
-                    React.createElement("div", { ref: docsRef, contentEditable: editMode, suppressContentEditableWarning: true, style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 22, width: "100%", outline: editMode ? "2px dashed #B8860B" : "none", outlineOffset: 4, borderRadius: editMode ? 4 : 0 } },
+                    React.createElement("div", { ref: docsRef, contentEditable: editMode, suppressContentEditableWarning: true, style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 22, width: "100%", boxShadow: editMode ? "inset 0 0 0 3px rgba(184,134,11,.28)" : "none", borderRadius: editMode ? 4 : 0 } },
                         generated && tab === "tree" && React.createElement(TreeDoc, { bom: bom, excluded: generated.excluded, tops: generated.tops, cfgName: generated.cfgName, m: m, purchased: generated.purchased || {}, profile: profile, customer: customer, sheetSize: sheetSize, editable: editMode && sheetSize === "tabloid", nudges: treeNudges, setNudges: setTreeNudges, anchors: treeAnchors, setAnchors: setTreeAnchors, textScale: textScale, zoom: treeZoom, showBorder: showBorder, fit: treeFit, setFit: setTreeFit }),
                         generated && tab === "plist" && React.createElement(PartsListDoc, { bom: bom, excluded: generated.excluded, tops: generated.tops, cfgName: generated.cfgName, m: m, purchased: generated.purchased || {}, profile: profile, customer: customer }),
                         generated && tab === "trav" && React.createElement(TravelerDocs, { bom: bom, excluded: generated.excluded, tops: generated.tops, m: m, profile: profile, espByPn: espByPn, customer: customer }),
