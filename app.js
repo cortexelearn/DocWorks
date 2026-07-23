@@ -1375,9 +1375,15 @@ function DocHeader({ title, docNo, pn, extra, m, company }) {
             ["Work Order", "Serial / Lot", "Program", "Issue Date", "Prepared", "Approved"].map((k, i) => (React.createElement("div", { key: k, style: { padding: "3px 8px", borderRight: i < 5 ? `1px solid ${C.line}` : "none", background: C.gray, fontWeight: 700, fontSize: 9, textTransform: "uppercase", color: "#555" } }, k))),
             [m.wo, m.sn, m.prog, m.date, "Engineering", "Quality"].map((v, i) => (React.createElement("div", { key: i, style: { padding: "3px 8px", borderRight: i < 5 ? `1px solid ${C.line}` : "none", fontFamily: i < 2 || i === 3 ? MONO : "inherit", fontSize: 10.5 } }, v))))));
 }
-function Sheet({ children, wide }) {
-    return React.createElement("div", { className: "dw-sheet", style: { background: "#fff", width: "100%", maxWidth: wide ? 1360 : 850, boxShadow: "0 2px 14px rgba(0,0,0,.13)", padding: wide ? "24px 28px" : "30px 34px", fontSize: 12.5, lineHeight: 1.45, boxSizing: "border-box" } }, children);
+function Sheet({ children, wide, fixed }) {
+    // `fixed` renders a true page-shaped canvas (e.g. 11x17) so what you see is what prints
+    const st = fixed
+        ? { background: "#fff", width: fixed.w, height: fixed.h, minWidth: fixed.w, boxShadow: "0 2px 14px rgba(0,0,0,.13)", padding: 14, fontSize: 12.5, lineHeight: 1.35, boxSizing: "border-box", display: "flex", flexDirection: "column" }
+        : { background: "#fff", width: "100%", maxWidth: wide ? 1360 : 850, boxShadow: "0 2px 14px rgba(0,0,0,.13)", padding: wide ? "24px 28px" : "30px 34px", fontSize: 12.5, lineHeight: 1.45, boxSizing: "border-box" };
+    return React.createElement("div", { className: "dw-sheet", style: st }, children);
 }
+/* canonical 11x17 landscape canvas in CSS px (17:11) */
+const SHEET_TABLOID = { w: 1500, h: Math.round(1500 * 11 / 17) };
 function H3({ children }) { return React.createElement("h3", { style: { fontSize: 13, color: C.navy, letterSpacing: ".04em", margin: "16px 0 8px", fontWeight: 700 } }, children); }
 function Intro({ children }) { return React.createElement("p", { style: { fontSize: 11.5, color: "#666", fontStyle: "italic", marginBottom: 10 } }, children); }
 function Callout({ k, v }) {
@@ -1851,20 +1857,24 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
         // Anything dragged outside this rect will not print on the single sheet.
         // Drawing border = the true 11x17 printable region. Solid double rule like a real
         // engineering sheet, so it can't be confused with the edit-mode highlight.
+        // The sheet's own drawing-box edge is the 11x17 border, so no in-SVG frame is drawn.
+        // An optional light guide marks the auto-layout extent when the toggle is on.
         const border = [];
         if (sheet.showBorder && D.oneSheet) {
-            border.push(React.createElement("rect", { key: "pa", x: 0, y: 0, width: FRAME_W, height: FRAME_H, fill: "none", stroke: "#1F3864", strokeWidth: 2.2 }));
-            border.push(React.createElement("rect", { key: "pa2", x: 5, y: 5, width: FRAME_W - 10, height: FRAME_H - 10, fill: "none", stroke: "#1F3864", strokeWidth: 0.8, opacity: .55 }));
-            border.push(React.createElement("text", { key: "pal", x: 9, y: -8, fontFamily: '"Arial",sans-serif', fontSize: 11, fontWeight: 700, fill: "#1F3864" }, "11\u00D717 SHEET BORDER \u2014 only content inside this frame prints"));
-            if (offCount)
-                border.push(React.createElement("text", { key: "palw", x: FRAME_W - 9, y: -8, textAnchor: "end", fontFamily: '"Arial",sans-serif', fontSize: 11, fontWeight: 700, fill: "#B03A00" },
-                    "\u26A0 ",
-                    offCount,
-                    " item",
-                    offCount > 1 ? "s" : "",
-                    " outside the sheet \u2014 will not print"));
+            border.push(React.createElement("rect", { key: "pa", x: 0, y: 0, width: FRAME_W, height: FRAME_H, fill: "none", stroke: "#9AA7BD", strokeWidth: 1, strokeDasharray: "9 7", opacity: .7 }));
         }
         const z = sheet.zoom || 1;
+        if (D.oneSheet) {
+            // The sheet is a fixed 11x17 canvas: the drawing fills it exactly and the zoom
+            // shrinks/expands the visible window about its centre. What you see here is
+            // precisely what lands on the printed sheet.
+            const cxv = minX + vbW / 2, cyv = minY + vbH / 2;
+            const zw = vbW / z, zh = vbH / z;
+            const svgFill = (React.createElement("svg", { viewBox: `${cxv - zw / 2} ${cyv - zh / 2} ${zw} ${zh}`, preserveAspectRatio: "xMidYMid meet", style: { width: "100%", height: "100%", display: "block" }, xmlns: "http://www.w3.org/2000/svg" },
+                border,
+                bels));
+            return { svg: svgFill, W: vbW };
+        }
         const svg = React.createElement("svg", { viewBox: `${minX} ${minY} ${vbW} ${vbH}`, preserveAspectRatio: "xMidYMid meet", style: fit ? { width: Math.min(vbW, cap), maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" }
                 : { width: vbW * z, height: "auto", display: "block", margin: "0 auto" }, xmlns: "http://www.w3.org/2000/svg" },
             border,
@@ -1922,7 +1932,7 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
     const svg = React.createElement("svg", { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "xMidYMid meet", style: fit ? { width: Math.min(W, cap), maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" } : { width: W, height: "auto", display: "block", margin: "0 auto" }, xmlns: "http://www.w3.org/2000/svg" }, els);
     return { svg, W };
 }
-function DraggableSvg({ svg, W, H, editable, nudges, setNudges, fit, cap, anchors, setAnchors }) {
+function DraggableSvg({ svg, W, H, editable, nudges, setNudges, fit, cap, anchors, setAnchors, fillBox }) {
     const ref = useRef(null);
     const drag = useRef(null);
     const anchorsRef = useRef(anchors);
@@ -2031,7 +2041,7 @@ function DraggableSvg({ svg, W, H, editable, nudges, setNudges, fit, cap, anchor
         host.addEventListener("contextmenu", onCtx);
         return () => { host.removeEventListener("pointerdown", onDown); host.removeEventListener("contextmenu", onCtx); window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
     }, [editable, nudges, setNudges, setAnchors]);
-    return (React.createElement("div", { ref: ref, style: fit ? {} : { width: W, minWidth: W } }, svg));
+    return (React.createElement("div", { ref: ref, className: "dw-drawwrap", style: fillBox ? { width: "100%", height: "100%" } : (fit ? {} : { width: W, minWidth: W }) }, svg));
 }
 function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer, sheetSize, editable, nudges, setNudges, anchors, setAnchors, textScale, zoom, showBorder, fit, setFit }) {
     const P = activeProfile(profile);
@@ -2083,22 +2093,22 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer
     const missing = flat.filter(r => !r.isAsm && isAssemblyLike(r.part) && !purchased[r.part.pn]);
     const tbC = { padding: "3px 8px", borderBottom: `1px solid ${C.line}`, borderRight: `1px solid ${C.line}`, fontSize: 9 };
     const oneSheet = D.oneSheet;
-    return (React.createElement(Sheet, { wide: oneSheet },
-        React.createElement("div", { style: { border: `1.5px solid #111`, marginBottom: oneSheet ? 6 : 12 } },
+    return (React.createElement(Sheet, { wide: oneSheet, fixed: oneSheet ? SHEET_TABLOID : null },
+        React.createElement("div", { style: { border: `1.5px solid #111`, marginBottom: oneSheet ? 6 : 12, flex: "0 0 auto" } },
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "200px 1fr 250px" } },
-                React.createElement("div", { style: { padding: "8px 10px", borderRight: "1px solid #111" } },
+                React.createElement("div", { style: { padding: oneSheet ? "4px 8px" : "8px 10px", borderRight: "1px solid #111" } },
                     P.id === "island"
-                        ? React.createElement("img", { src: ISLAND_LOGO, alt: "Island Components", style: { height: 34, display: "block" } })
+                        ? React.createElement("img", { src: ISLAND_LOGO, alt: "Island Components", style: { height: oneSheet ? 24 : 34, display: "block" } })
                         : React.createElement("div", { style: { fontWeight: 900, fontSize: 20, color: C.navy, fontStyle: "italic", letterSpacing: "-.02em" } },
                             "EZ",
                             React.createElement("span", { style: { fontSize: 13, fontStyle: "normal", letterSpacing: ".08em" } }, "MOTORS")),
                     React.createElement("div", { style: { fontSize: 8.5, marginTop: 2 } }, P.company),
                     React.createElement("div", { style: { fontSize: 7.5, color: "#555" } }, P.address),
                     React.createElement("div", { style: { fontSize: 7.5, color: "#555" } }, P.cage)),
-                React.createElement("div", { style: { padding: "8px 10px", textAlign: "center", borderRight: "1px solid #111" } },
-                    React.createElement("div", { style: { fontWeight: 800, fontSize: 16 } }, (bom.parts[tops[0]] && bom.parts[tops[0]].desc ? bom.parts[tops[0]].desc : tops[0]).toUpperCase()),
-                    React.createElement("div", { style: { fontSize: 13, letterSpacing: ".1em", marginTop: 2 } }, "FAMILY TREE"),
-                    React.createElement("div", { style: { fontSize: 10, marginTop: 3 } },
+                React.createElement("div", { style: { padding: oneSheet ? "4px 8px" : "8px 10px", textAlign: "center", borderRight: "1px solid #111" } },
+                    React.createElement("div", { style: { fontWeight: 800, fontSize: oneSheet ? 13 : 16 } }, (bom.parts[tops[0]] && bom.parts[tops[0]].desc ? bom.parts[tops[0]].desc : tops[0]).toUpperCase()),
+                    React.createElement("div", { style: { fontSize: oneSheet ? 11 : 13, letterSpacing: ".1em", marginTop: 1 } }, "FAMILY TREE"),
+                    React.createElement("div", { style: { fontSize: oneSheet ? 9 : 10, marginTop: 2 } },
                         "TOP LEVEL ASSEMBL",
                         tops.length > 1 ? "IES" : "Y",
                         ": ",
@@ -2109,7 +2119,7 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer
                     React.createElement("div", { style: { ...tbC, fontWeight: 700 } }, r[0]),
                     React.createElement("div", { style: { ...tbC, fontFamily: MONO } }, r[1]),
                     React.createElement("div", { style: { ...tbC, borderRight: "none", textAlign: "center", fontWeight: i === 0 ? 700 : 400 } }, r[2]))))))),
-        React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", marginBottom: 4, gap: 6 } },
+        React.createElement("div", { className: "noprint", style: { display: oneSheet ? "none" : "flex", justifyContent: "flex-end", marginBottom: 4, gap: 6 } },
             React.createElement("span", { style: { fontSize: 10, color: "#999", alignSelf: "center" } }, oneSheet ? "Large-format sheet — use Actual size for legibility, Fit width for overview" : ""),
             React.createElement("span", { style: { display: "inline-flex", gap: 3, alignItems: "center" } },
                 React.createElement("span", { style: { fontSize: 10, color: "#999" } }, "View:"),
@@ -2117,21 +2127,23 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer
         allSheets.map(sh => {
             const d = SheetDrawing({ bom, sheet: sh, purchased, fit, qaField: P.qaField });
             const shTop = bom.parts[sh.top] || {};
-            return (React.createElement("div", { key: sh.sheetNo, style: { border: "1px solid #111", marginBottom: oneSheet ? 4 : 10, background: "#fff", breakInside: "avoid", pageBreakInside: "avoid" } },
-                React.createElement("div", { style: { borderBottom: "1px solid #111", padding: "3px 8px", fontSize: 9, display: "flex", justifyContent: "space-between", background: "#FAFAF8" } },
+            return (React.createElement("div", { key: sh.sheetNo, style: { border: oneSheet ? "2px solid #111" : "1px solid #111", marginBottom: oneSheet ? 4 : 10, background: "#fff", breakInside: "avoid", pageBreakInside: "avoid", flex: oneSheet ? "1 1 auto" : "0 0 auto", minHeight: 0, display: oneSheet ? "flex" : "block", flexDirection: "column" } },
+                React.createElement("div", { style: { borderBottom: "1px solid #111", padding: "3px 8px", fontSize: 9, display: "flex", justifyContent: "space-between", background: "#FAFAF8", flex: "0 0 auto" } },
                     React.createElement("span", { style: { fontWeight: 700 } },
                         "SHEET ",
                         sh.sheetNo,
                         " OF ",
                         nSheets,
                         sh.sheetNo > 1 ? ` — SUBASSEMBLY: ${sh.top}` : "",
-                        oneSheet ? " — 11×17" : ""),
+                        oneSheet ? " — 11×17 (what you see is what prints)" : ""),
                     React.createElement("span", { style: { fontFamily: MONO, color: "#666" } }, sh.sheetNo === 1 ? tops.join(" + ") : (shTop.desc || "").toUpperCase())),
-                React.createElement("div", { style: { padding: 8, overflowX: fit ? "hidden" : "auto", display: "flex", justifyContent: "center" } }, editable
-                    ? React.createElement(DraggableSvg, { svg: d.svg, W: d.W, H: 0, editable: editable, nudges: nudges, setNudges: setNudges, fit: fit, cap: D.usableW, anchors: anchors, setAnchors: setAnchors })
-                    : (fit ? d.svg : React.createElement("div", { style: { width: d.W, minWidth: d.W } }, d.svg)))));
+                React.createElement("div", { className: "dw-drawbox", style: oneSheet
+                        ? { flex: "1 1 auto", minHeight: 0, overflow: "hidden", position: "relative", background: "#fff" }
+                        : { padding: 8, overflowX: fit ? "hidden" : "auto", display: "flex", justifyContent: "center" } }, editable
+                    ? React.createElement(DraggableSvg, { svg: d.svg, W: d.W, H: 0, editable: editable, nudges: nudges, setNudges: setNudges, fit: oneSheet ? true : fit, cap: D.usableW, anchors: anchors, setAnchors: setAnchors, fillBox: oneSheet })
+                    : (oneSheet ? d.svg : (fit ? d.svg : React.createElement("div", { className: "dw-drawwrap", style: { width: d.W, minWidth: d.W } }, d.svg))))));
         }),
-        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "150px 1fr 250px", gap: 8, marginBottom: 6, fontSize: oneSheet ? 7.5 : 8 } },
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "150px 1fr 250px", gap: 6, marginBottom: 4, fontSize: oneSheet ? 6.8 : 8, lineHeight: oneSheet ? 1.25 : 1.45, flex: "0 0 auto" } },
             React.createElement("div", { style: { border: "1px solid #111", padding: 8, fontSize: 8 } },
                 React.createElement("div", { style: { fontWeight: 700, marginBottom: 6 } }, "LEGEND"),
                 React.createElement("div", { style: { display: "flex", gap: 6, alignItems: "center", marginBottom: 4 } },
@@ -2409,6 +2421,7 @@ function vignetteSvg(title) {
 /* ---- Parts List document (P-<top PN>) ---- */
 function PartsListDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer }) {
     const P = activeProfile(profile);
+    const oneSheet = false; // parts list always renders as a standard portrait sheet
     const topPart = bom.parts[tops[0]] || {};
     const flat = tops.flatMap(t => scopedTree(bom, excluded, t));
     const missing = flat.filter(r => !r.isAsm && isAssemblyLike(r.part) && !purchased[r.part.pn]);
@@ -2418,19 +2431,19 @@ function PartsListDoc({ bom, excluded, tops, cfgName, m, purchased, profile, cus
     return (React.createElement(Sheet, null,
         React.createElement("div", { style: { border: `1.5px solid #111`, marginBottom: 12 } },
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "200px 1fr 250px" } },
-                React.createElement("div", { style: { padding: "8px 10px", borderRight: "1px solid #111" } },
+                React.createElement("div", { style: { padding: oneSheet ? "4px 8px" : "8px 10px", borderRight: "1px solid #111" } },
                     P.id === "island"
-                        ? React.createElement("img", { src: ISLAND_LOGO, alt: "Island Components", style: { height: 34, display: "block" } })
+                        ? React.createElement("img", { src: ISLAND_LOGO, alt: "Island Components", style: { height: oneSheet ? 24 : 34, display: "block" } })
                         : React.createElement("div", { style: { fontWeight: 900, fontSize: 20, color: C.navy, fontStyle: "italic", letterSpacing: "-.02em" } },
                             "EZ",
                             React.createElement("span", { style: { fontSize: 13, fontStyle: "normal", letterSpacing: ".08em" } }, "MOTORS")),
                     React.createElement("div", { style: { fontSize: 8.5, marginTop: 2 } }, P.company),
                     React.createElement("div", { style: { fontSize: 7.5, color: "#555" } }, P.address),
                     React.createElement("div", { style: { fontSize: 7.5, color: "#555" } }, P.cage)),
-                React.createElement("div", { style: { padding: "8px 10px", textAlign: "center", borderRight: "1px solid #111" } },
-                    React.createElement("div", { style: { fontWeight: 800, fontSize: 16 } }, (topPart.desc || tops[0]).toUpperCase()),
+                React.createElement("div", { style: { padding: oneSheet ? "4px 8px" : "8px 10px", textAlign: "center", borderRight: "1px solid #111" } },
+                    React.createElement("div", { style: { fontWeight: 800, fontSize: oneSheet ? 13 : 16 } }, (topPart.desc || tops[0]).toUpperCase()),
                     React.createElement("div", { style: { fontSize: 13, letterSpacing: ".1em", marginTop: 2 } }, "PARTS LIST"),
-                    React.createElement("div", { style: { fontSize: 10, marginTop: 3 } },
+                    React.createElement("div", { style: { fontSize: oneSheet ? 9 : 10, marginTop: 2 } },
                         "TOP LEVEL ASSEMBL",
                         tops.length > 1 ? "IES" : "Y",
                         ": ",
@@ -3415,54 +3428,55 @@ async function saveOut(filename, blob) {
 }
 async function exportPaneAsPDF(paneEl, title, pageSize) {
     // Print the exact preview via the browser's own renderer -> user picks "Save as PDF".
-    // pageSize: "letter" | "tabloid-landscape" | "tabloid-portrait"
-    const svgClones = [];
-    // inline computed background so print shows shading
+    // The content is laid out INSIDE the print window at page width, measured there, then
+    // scaled to land on exactly one sheet that fills the page.
     const win = window.open("", "_blank");
     if (!win)
         throw new Error("Popup blocked — allow popups for this site to export PDF.");
-    const sizeCSS = pageSize === "tabloid-landscape" ? "17in 11in"
-        : pageSize === "tabloid-portrait" ? "11in 17in" : "8.5in 11in";
-    // For the 11x17 family tree we must land on exactly ONE page: measure the live content
-    // and scale it down to the printable area so nothing spills to a second sheet.
     const isTab = pageSize && pageSize.indexOf("tabloid") === 0;
-    const pageW = isTab ? (pageSize.indexOf("landscape") >= 0 ? 17 : 11) : 8.5;
-    const pageH = isTab ? (pageSize.indexOf("landscape") >= 0 ? 11 : 17) : 11;
-    const availW = (pageW - 0.8) * 96, availH = (pageH - 0.8) * 96;
-    const cw = Math.max(1, paneEl.scrollWidth), ch = Math.max(1, paneEl.scrollHeight);
-    const k = isTab ? Math.min(1, availW / cw, availH / ch) : 1;
+    const landscape = isTab && pageSize.indexOf("landscape") >= 0;
+    const pageW = isTab ? (landscape ? 17 : 11) : 8.5;
+    const pageH = isTab ? (landscape ? 11 : 17) : 11;
+    const sizeCSS = `${pageW}in ${pageH}in`;
+    const availW = Math.round((pageW - 0.8) * 96), availH = Math.round((pageH - 0.8) * 96);
     const html = paneEl.innerHTML;
     win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>
 <style>
   @page { size: ${sizeCSS}; margin: 0.4in; }
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; box-sizing: border-box; }
   body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; background: #fff; }
-  /* each generated document (Sheet) fills the printable width and starts on its own page */
   .dw-sheet { max-width: 100% !important; width: 100% !important; box-shadow: none !important; margin: 0 auto !important; padding: 0 !important; break-inside: avoid-page; }
   .dw-sheet + .dw-sheet { break-before: ${isTab ? "auto" : "page"}; page-break-before: ${isTab ? "auto" : "always"}; }
-  /* tables must not overflow the page width */
   table { width: 100% !important; max-width: 100% !important; table-layout: fixed; border-collapse: collapse; }
   td, th { overflow-wrap: break-word; word-break: break-word; }
   svg { max-width: 100% !important; height: auto !important; }
+  ${isTab ? ".dw-drawbox, .dw-drawwrap { width: 100% !important; min-width: 0 !important; overflow: visible !important; } .dw-drawwrap > svg, .dw-sheet svg { width: 100% !important; } .noprint { display: none !important; }" : ""}
   .dw-offframe { display: none !important; }   /* content outside the sheet border does not print */
   @media print { .noprint { display: none !important; } }
   .barp { position: fixed; top: 0; left: 0; right: 0; background: #1F3864; color: #fff; padding: 10px 16px; font: 13px Segoe UI, Arial; z-index: 99; display: flex; gap: 12px; align-items: center; }
   .barp button { background: #fff; color: #1F3864; border: none; padding: 6px 14px; font-weight: 700; border-radius: 3px; cursor: pointer; }
-  .content { margin-top: 0; }
-  @media screen { .content { margin-top: 52px; padding: 16px; background: #eee; } .dw-sheet { margin-bottom: 16px !important; box-shadow: 0 2px 10px rgba(0,0,0,.15) !important; } }
+  @media screen { #fitwrap { margin: 62px auto 20px; box-shadow: 0 2px 16px rgba(0,0,0,.2); } body { background: #eee; } }
 </style></head><body>
-<div class="barp noprint"><b>DocWorks — Print to PDF</b><button onclick="window.print()">🖨 Print / Save as PDF</button><span style="font-weight:400;font-size:12px">Choose "Save as PDF" — each assembly document starts on its own page. Destination:${pageSize !== "letter" ? ' and set paper to <b>Tabloid / 11×17</b> ' + (pageSize.includes("landscape") ? "Landscape" : "Portrait") : ""}.</span></div>
-<div class="content">${isTab
-        ? `<div style="width:${Math.ceil(cw * k)}px;height:${Math.ceil(ch * k)}px;overflow:hidden"><div style="width:${cw}px;transform:scale(${k});transform-origin:top left">${html}</div></div>`
-        : html}</div>
+<div class="barp noprint"><b>DocWorks — Print to PDF</b><button onclick="window.print()">🖨 Print / Save as PDF</button><span style="font-weight:400;font-size:12px">Choose "Save as PDF" — each assembly document starts on its own page. Destination${pageSize !== "letter" ? ' and set paper to <b>Tabloid / 11×17</b> ' + (landscape ? "Landscape" : "Portrait") : ""}.</span></div>
+<div id="fitwrap" style="overflow:hidden;background:#fff"><div id="fitinner" style="width:${availW}px;transform-origin:top left">${html}</div></div>
+<script>
+(function(){
+  var AW=${availW}, AH=${availH}, TAB=${isTab ? "true" : "false"};
+  function fit(){
+    var wrap=document.getElementById('fitwrap'), inner=document.getElementById('fitinner');
+    if(!wrap||!inner) return;
+    if(!TAB){ wrap.style.width=AW+'px'; return; }   // letter: natural flow, page-per-sheet
+    var h=inner.scrollHeight, k=Math.min(1, AH/h);
+    inner.style.transform='scale('+k+')';
+    wrap.style.width=Math.ceil(AW*k)+'px';
+    wrap.style.height=Math.ceil(h*k)+'px';
+  }
+  if(document.readyState==='complete') fit(); else window.addEventListener('load',fit);
+  setTimeout(function(){ fit(); try{ window.focus(); window.print(); }catch(e){} }, 700);
+})();
+<\/script>
 </body></html>`);
     win.document.close();
-    // give layout a tick, then auto-open print dialog
-    setTimeout(() => { try {
-        win.focus();
-        win.print();
-    }
-    catch (e) { } }, 600);
     return "print";
 }
 async function exportPaneAsWord(paneEl, filename, landscape) {
@@ -3741,7 +3755,7 @@ function DocWorks() {
                 React.createElement("button", { onClick: exportProject, title: "Save your working environment (BOM, edits, positions, settings) to a file", style: { background: "rgba(255,255,255,.12)", color: "#fff", border: "1px solid rgba(255,255,255,.35)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" } }, "\uD83D\uDCBE Save Project"),
                 React.createElement("button", { onClick: () => projFileRef.current && projFileRef.current.click(), title: "Load a saved working environment", style: { background: "rgba(255,255,255,.12)", color: "#fff", border: "1px solid rgba(255,255,255,.35)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" } }, "\uD83D\uDCC2 Load Project"),
                 React.createElement("button", { onClick: resetAll, title: "Clear everything back to an empty workspace", style: { background: "transparent", color: "#F2C14E", border: "1px solid rgba(242,193,78,.6)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" } }, "\u21BA Reset All"),
-                React.createElement("span", { style: { fontSize: 10.5, opacity: .55, fontFamily: MONO, marginLeft: 4 } }, "v0.26"))),
+                React.createElement("span", { style: { fontSize: 10.5, opacity: .55, fontFamily: MONO, marginLeft: 4 } }, "v0.28"))),
         React.createElement("div", { style: { display: "flex", flex: 1, minHeight: 0, flexWrap: "wrap" } },
             React.createElement("div", { style: { width: 400, minWidth: 310, flexShrink: 0, background: C.paper, borderRight: `1px solid ${C.line}`, padding: 16, overflowY: "auto", maxHeight: "calc(100vh - 46px)" } },
                 React.createElement("div", { style: { marginBottom: 18 } },
