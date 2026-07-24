@@ -1448,11 +1448,10 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
       const isPurch = !n.kids.length && isAssemblyLike(n.part) && purchased[n.pn];
       const key = n.pn + "_" + n.depth + "_" + Math.round(n.x);
       // assembly box
+      const boxStart = bels.length;
       bels.push(<rect key={"b" + key} x={bx0} y={ny} width={NW} height={NH} rx={3}
-        data-pn={n.pn} className={sheet.editable ? "dw-draggable" : undefined}
         fill={missing ? "#FFF9E8" : isTop ? "#EEF3FB" : "#fff"} stroke={missing ? "#B8860B" : isTop ? C.navy : C.navy2}
-        strokeWidth={isTop ? 2.2 : 1.5} strokeDasharray={missing ? "5 3" : "none"}
-        style={sheet.editable ? { cursor: "grab" } : undefined} />);
+        strokeWidth={isTop ? 2.2 : 1.5} strokeDasharray={missing ? "5 3" : "none"} />);
       // text block laid out from the font metrics so PN / description / qty never collide,
       // and the description sits centred in the space between them at any text size.
       const padT = Math.max(3, fPN * 0.35);
@@ -1468,6 +1467,18 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
       bels.push(<text key={"q" + key} x={bx0 + NW / 2} y={qtyBase} textAnchor="middle" fontFamily={FONT} fontSize={fQ} fontWeight={700} fill="#111">{"QTY: " + (n.row ? n.row.qty : "1")}</text>);
       if (missing) bels.push(<text key={"m" + key} x={bx0 + NW / 2} y={ny + NH + 9} textAnchor="middle" fontFamily={FONT} fontSize={7} fontWeight={700} fill="#B8860B">▲ NO BOM</text>);
       if (isPurch) bels.push(<text key={"u" + key} x={bx0 + NW / 2} y={ny + NH + 9} textAnchor="middle" fontFamily={FONT} fontSize={7} fontWeight={700} fill="#666">(PURCHASED)</text>);
+      // group the box and all of its text so the ENTIRE assembly block is click-and-drag,
+      // not just the slivers of background between the text lines
+      {
+        const blockEls = bels.splice(boxStart);
+        bels.push(
+          <g key={"blk" + key} data-pn={n.pn} className={sheet.editable ? "dw-draggable" : undefined}
+             style={sheet.editable ? { cursor: "grab" } : undefined}>
+            {sheet.editable && <rect x={bx0} y={ny} width={NW} height={NH} rx={3} fill="transparent" pointerEvents="all" />}
+            {blockEls}
+          </g>
+        );
+      }
       // component list BELOW the box (left-aligned within this assembly's lane)
       if (n.hasBullets) {
         const railX = bx0 + 3, by = ny + NH + 6;
@@ -1524,7 +1535,7 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
     }
     // expand the drawing bounds to include every node — including boxes dragged outside
     // the original layout area — so nothing becomes unreachable off-canvas.
-    let minX = 0, minY = -20, maxX = (sheet.showBorder && D.oneSheet) ? Math.max(W, FRAME_W) : W, maxY = (sheet.showBorder && D.oneSheet) ? Math.max(H, FRAME_H) : H;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const n of L.flat) {
       const bx = PADX + (n.boxX != null ? n.boxX : n.x - NW / 2), by = PADY + n.y;
       const listH = n.hasBullets ? (nodeListLines(n) * BLH + 10) : 0;
@@ -1532,6 +1543,9 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
       maxX = Math.max(maxX, bx + Math.max(NW, n.compW || 0) + 14);
       maxY = Math.max(maxY, by + NH + listH + 14);
     }
+    if (!isFinite(minX)) { minX = 0; minY = 0; maxX = W; maxY = H; }
+    const PADV = 10;                       // small breathing room around the drawing
+    minX -= PADV; minY -= PADV; maxX += PADV; maxY += PADV;
     const vbW = Math.max(40, maxX - minX), vbH = Math.max(40, maxY - minY);
     const cap = D.usableW;
     // firm sheet boundary: W/H are the ORIGINAL layout bounds = what fits the 11x17 sheet.
@@ -1546,13 +1560,16 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
       // The sheet is a fixed 11x17 canvas: the drawing fills it exactly and the zoom
       // shrinks/expands the visible window about its centre. What you see here is
       // precisely what lands on the printed sheet.
-      const cxv = minX + vbW / 2, cyv = minY + vbH / 2;
-      const zw = vbW / z, zh = vbH / z;
+      // an explicit view rect (from marquee "zoom to box") overrides the auto fit
+      const V = sheet.view;
+      const bx = V ? V.x : minX, by = V ? V.y : minY, bw = V ? V.w : vbW, bh = V ? V.h : vbH;
+      const cxv = bx + bw / 2, cyv = by + bh / 2;
+      const zw = bw / z, zh = bh / z;
       const svgFill = (
         <svg viewBox={`${cxv - zw / 2} ${cyv - zh / 2} ${zw} ${zh}`} preserveAspectRatio="xMidYMid meet"
           style={{ width: "100%", height: "100%", display: "block" }} xmlns="http://www.w3.org/2000/svg">{border}{bels}</svg>
       );
-      return { svg: svgFill, W: vbW };
+      return { svg: svgFill, W: vbW, bounds: { x: minX, y: minY, w: vbW, h: vbH } };
     }
     const svg = <svg viewBox={`${minX} ${minY} ${vbW} ${vbH}`} preserveAspectRatio="xMidYMid meet"
       style={fit ? { width: Math.min(vbW, cap), maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" }
@@ -1613,7 +1630,7 @@ function SheetDrawing({ bom, sheet, purchased, fit, qaField }) {
   return { svg, W };
 }
 
-function DraggableSvg({ svg, W, H, editable, nudges, setNudges, fit, cap, anchors, setAnchors, fillBox }) {
+function DraggableSvg({ svg, W, H, editable, nudges, setNudges, fit, cap, anchors, setAnchors, fillBox, setView }) {
   const ref = useRef(null);
   const drag = useRef(null);
   const anchorsRef = useRef(anchors);
@@ -1629,7 +1646,36 @@ function DraggableSvg({ svg, W, H, editable, nudges, setNudges, fit, cap, anchor
       return { x: (clientX - r.left) * sx, y: (clientY - r.top) * sy };
     };
     const onDown = e => {
-      const rect = e.target.closest(".dw-draggable"); if (!rect) return;
+      const rect = e.target.closest(".dw-draggable");
+      if (!rect) {
+        // empty canvas -> rubber-band a region, then zoom to fit it
+        if (!setView || e.button !== 0) return;
+        e.preventDefault();
+        const start = toSvg(e.clientX, e.clientY);
+        const hostR = host.getBoundingClientRect();
+        const band = document.createElement("div");
+        band.style.cssText = "position:absolute;border:1.5px dashed #1F3864;background:rgba(31,56,100,.10);pointer-events:none;z-index:20";
+        host.style.position = host.style.position || "relative";
+        host.appendChild(band);
+        const sx = e.clientX - hostR.left, sy = e.clientY - hostR.top;
+        const mv = ev => {
+          const cx = ev.clientX - hostR.left, cy = ev.clientY - hostR.top;
+          band.style.left = Math.min(sx, cx) + "px"; band.style.top = Math.min(sy, cy) + "px";
+          band.style.width = Math.abs(cx - sx) + "px"; band.style.height = Math.abs(cy - sy) + "px";
+        };
+        const up = ev => {
+          window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up);
+          if (band.parentNode) band.parentNode.removeChild(band);
+          const end = toSvg(ev.clientX, ev.clientY);
+          const x = Math.min(start.x, end.x), y = Math.min(start.y, end.y);
+          const w = Math.abs(end.x - start.x), h = Math.abs(end.y - start.y);
+          // ignore stray clicks; require a real drag
+          if (Math.abs(ev.clientX - e.clientX) < 12 || Math.abs(ev.clientY - e.clientY) < 12) return;
+          setView({ x, y, w, h });
+        };
+        window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+        return;
+      }
       const pn = rect.getAttribute("data-pn"); if (!pn) return;
       e.preventDefault();
       const start = toSvg(e.clientX, e.clientY);
@@ -1703,14 +1749,14 @@ function DraggableSvg({ svg, W, H, editable, nudges, setNudges, fit, cap, anchor
     host.addEventListener("pointerdown", onDown);
     host.addEventListener("contextmenu", onCtx);
     return () => { host.removeEventListener("pointerdown", onDown); host.removeEventListener("contextmenu", onCtx); window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
-  }, [editable, nudges, setNudges, setAnchors]);
+  }, [editable, nudges, setNudges, setAnchors, setView]);
   return (
-    <div ref={ref} className="dw-drawwrap" style={fillBox ? { width: "100%", height: "100%" } : (fit ? {} : { width: W, minWidth: W })}>
+    <div ref={ref} className="dw-drawwrap" style={fillBox ? { width: "100%", height: "100%", position: "relative" } : (fit ? {} : { width: W, minWidth: W })}>
       {svg}
     </div>
   );
 }
-function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer, sheetSize, editable, nudges, setNudges, anchors, setAnchors, textScale, zoom, showBorder, fit, setFit }) {
+function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer, sheetSize, editable, nudges, setNudges, anchors, setAnchors, textScale, zoom, showBorder, fit, setFit, view, setView }) {
   const P = activeProfile(profile);
   const tA = (textScale && textScale.asm) || 1;   // assembly name/box scale
   const tC = (textScale && textScale.comp) || 1;  // component line scale
@@ -1742,7 +1788,7 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer
       });
     });
   }
-  allSheets.forEach(s => { s.D = D; s.editable = editable; s.nudges = nudges; s.setNudges = setNudges; s.anchors = anchors || {}; s.zoom = zoom || 1; s.showBorder = showBorder; });
+  allSheets.forEach(s => { s.D = D; s.editable = editable; s.nudges = nudges; s.setNudges = setNudges; s.anchors = anchors || {}; s.zoom = zoom || 1; s.showBorder = showBorder; s.view = view || null; s.setView = setView; });
   allSheets.forEach((s, i) => s.sheetNo = i + 1);
   const byTop = {}; allSheets.forEach(s => { if (byTop[s.top] === undefined) byTop[s.top] = s.sheetNo; });
   allSheets.forEach(s => { s.refs = {}; s.collapse.forEach(pn => { if (byTop[pn]) s.refs[pn] = byTop[pn]; }); });
@@ -1811,7 +1857,7 @@ function TreeDoc({ bom, excluded, tops, cfgName, m, purchased, profile, customer
               ? { flex: "1 1 auto", minHeight: 0, overflow: "hidden", position: "relative", background: "#fff" }
               : { padding: 8, overflowX: fit ? "hidden" : "auto", display: "flex", justifyContent: "center" }}>
               {editable
-                ? <DraggableSvg svg={d.svg} W={d.W} H={0} editable={editable} nudges={nudges} setNudges={setNudges} fit={oneSheet ? true : fit} cap={D.usableW} anchors={anchors} setAnchors={setAnchors} fillBox={oneSheet} />
+                ? <DraggableSvg svg={d.svg} W={d.W} H={0} editable={editable} nudges={nudges} setNudges={setNudges} fit={oneSheet ? true : fit} cap={D.usableW} anchors={anchors} setAnchors={setAnchors} fillBox={oneSheet} setView={setView} />
                 : (oneSheet ? d.svg : (fit ? d.svg : <div className="dw-drawwrap" style={{ width: d.W, minWidth: d.W }}>{d.svg}</div>))}
             </div>
           </div>
@@ -3123,14 +3169,14 @@ function DocWorks() {
   const projFileRef = useRef(null); const tplFileRef = useRef(null);
   const applyRows = rows => { setBom(buildBOM(rows, [])); setGenerated(null); setCheck(null); setSrcLabel(s => /\(edited\)$/.test(s) ? s : s + " (edited)"); };
   const download = (name, obj) => { const b = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 500); };
-  const exportProject = () => download("docworks_project.json", { version: "0.9", rows: bom.rows, srcLabel, activeCfg, excluded, purchased, meta: { wo, sn, prog, date, rev, eco, change, profile, espByPn, customer, sheetSize, treeNudges, treeAnchors, textScale, treeZoom, showBorder, treeFit }, customTemplates: customDecls });
+  const exportProject = () => download("docworks_project.json", { version: "0.9", rows: bom.rows, srcLabel, activeCfg, excluded, purchased, meta: { wo, sn, prog, date, rev, eco, change, profile, espByPn, customer, sheetSize, treeNudges, treeAnchors, textScale, treeZoom, showBorder, treeFit, treeView }, customTemplates: customDecls });
   const importProject = f => { const rd = new FileReader(); rd.onload = () => { try {
       const j = JSON.parse(rd.result);
       if (!Array.isArray(j.rows)) throw new Error("no rows[]");
       setCustomDecls(j.customTemplates || []); setCustomTemplates(j.customTemplates || []);
       setBom(buildBOM(j.rows, [])); setSrcLabel(j.srcLabel || f.name); setActiveCfg(j.activeCfg || "actuator");
       setExcluded(j.excluded || {}); setPurchased(j.purchased || {});
-      const mm = j.meta || {}; if (mm.profile) setProfile(mm.profile); if (mm.sheetSize) setSheetSize(mm.sheetSize); if (mm.treeNudges) setTreeNudges(mm.treeNudges); if (mm.treeAnchors) setTreeAnchors(mm.treeAnchors); if (mm.textScale) setTextScale(mm.textScale); if (mm.treeZoom) setTreeZoom(mm.treeZoom); if (typeof mm.showBorder === "boolean") setShowBorder(mm.showBorder); if (typeof mm.treeFit === "boolean") setTreeFit(mm.treeFit); if (mm.espByPn) setEspByPn(mm.espByPn); if (mm.customer) setCustomerOverride(mm.customer); setWo(mm.wo || ""); setSn(mm.sn || ""); setProg(mm.prog || "Sample Program"); setDate(mm.date || date); setRev(mm.rev || "1"); setEco(mm.eco || "ECO-0001"); setChange(mm.change || "INITIAL RELEASE (GENERATED)");
+      const mm = j.meta || {}; if (mm.profile) setProfile(mm.profile); if (mm.sheetSize) setSheetSize(mm.sheetSize); if (mm.treeNudges) setTreeNudges(mm.treeNudges); if (mm.treeAnchors) setTreeAnchors(mm.treeAnchors); if (mm.textScale) setTextScale(mm.textScale); if (mm.treeZoom) setTreeZoom(mm.treeZoom); if (typeof mm.showBorder === "boolean") setShowBorder(mm.showBorder); if (typeof mm.treeFit === "boolean") setTreeFit(mm.treeFit); if (mm.treeView) setTreeView(mm.treeView); if (mm.espByPn) setEspByPn(mm.espByPn); if (mm.customer) setCustomerOverride(mm.customer); setWo(mm.wo || ""); setSn(mm.sn || ""); setProg(mm.prog || "Sample Program"); setDate(mm.date || date); setRev(mm.rev || "1"); setEco(mm.eco || "ECO-0001"); setChange(mm.change || "INITIAL RELEASE (GENERATED)");
       setGenerated(null); setCheck(null);
     } catch (e) { alert("Project import failed: " + e.message); } }; rd.readAsText(f); };
   const importTemplates = f => { const rd = new FileReader(); rd.onload = () => { try {
@@ -3144,7 +3190,7 @@ function DocWorks() {
   const clearWorkspace = (keepProfile) => {
     // clear every piece of working state back to a clean slate
     setExcluded({}); setPurchased({}); setManualTop(""); setActiveCfg("actuator");
-    setGenerated(null); setCheck(null); setEditMode(false); setTreeNudges({}); setTreeAnchors({}); setTextScale({ asm: 1, comp: 1 }); setTreeZoom(1); setShowBorder(true); setTreeFit(false);
+    setGenerated(null); setCheck(null); setEditMode(false); setTreeNudges({}); setTreeAnchors({}); setTextScale({ asm: 1.2, comp: 1 }); setTreeZoom(1.5); setShowBorder(true); setTreeFit(false); setTreeView(null);
     setEspByPn({}); setCustomerOverride(""); setWo(""); setSn("");
     setRev("1"); setEco("ECO-0001"); setChange("INITIAL RELEASE (GENERATED)");
     setCustomDecls([]); setCustomTemplates([]);
@@ -3171,9 +3217,10 @@ function DocWorks() {
   const [paneDrop, setPaneDrop] = useState(false);
   const [treeNudges, setTreeNudges] = useState({}); // pn -> {dx,dy} manual drag offsets for family tree
   const [treeAnchors, setTreeAnchors] = useState({}); // pn -> {in,out} connector side overrides
-  const [textScale, setTextScale] = useState({ asm: 1, comp: 1 }); // family-tree text sizing
-  const [treeZoom, setTreeZoom] = useState(1);
+  const [textScale, setTextScale] = useState({ asm: 1.2, comp: 1 }); // family-tree text sizing
+  const [treeZoom, setTreeZoom] = useState(1.5);
   const [treeFit, setTreeFit] = useState(false); // false = actual size (text renders at true size)
+  const [treeView, setTreeView] = useState(null); // {x,y,w,h} region set by marquee zoom
   const [showBorder, setShowBorder] = useState(true);
   const [exportDirName, setExportDirName] = useState("");
   const [exportMsg, setExportMsg] = useState("");
@@ -3267,7 +3314,7 @@ function DocWorks() {
             style={{ background: "rgba(255,255,255,.12)", color: "#fff", border: "1px solid rgba(255,255,255,.35)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" }}>📂 Load Project</button>
           <button onClick={resetAll} title="Clear everything back to an empty workspace"
             style={{ background: "transparent", color: "#F2C14E", border: "1px solid rgba(242,193,78,.6)", padding: "5px 12px", fontSize: 11.5, fontWeight: 600, borderRadius: 3, cursor: "pointer" }}>↺ Reset All</button>
-          <span style={{ fontSize: 10.5, opacity: .55, fontFamily: MONO, marginLeft: 4 }}>v0.29</span>
+          <span style={{ fontSize: 10.5, opacity: .55, fontFamily: MONO, marginLeft: 4 }}>v0.31</span>
         </div>
       </div>
 
@@ -3546,7 +3593,9 @@ function DocWorks() {
                     <button onClick={() => setTreeZoom(z => Math.max(0.2, +(z - 0.1).toFixed(2)))} style={miniBtn}>−</button>
                     <span style={{ fontSize: 10, fontFamily: MONO, minWidth: 34, textAlign: "center" }}>{Math.round(treeZoom * 100)}%</span>
                     <button onClick={() => setTreeZoom(z => Math.min(3, +(z + 0.1).toFixed(2)))} style={miniBtn}>+</button>
-                    <button onClick={() => setTreeZoom(1)} style={{ ...miniBtn, width: "auto", padding: "1px 6px" }}>1:1</button>
+                    <button onClick={() => { setTreeZoom(1.5); setTreeView(null); }} title="Back to the default working scale" style={{ ...miniBtn, width: "auto", padding: "1px 6px" }}>Default</button>
+                    <button onClick={() => { setTreeView(null); setTreeZoom(1); }} title="Fit the whole tree to the sheet"
+                      style={{ ...miniBtn, width: "auto", padding: "1px 7px", fontWeight: 700, borderColor: treeView ? C.navy : "#ccc", color: treeView ? C.navy : "#333" }}>⛶ Fit all</button>
                   </span>
                   <button onClick={() => setShowBorder(v => !v)}
                     style={{ border: `1px solid ${showBorder ? "#B03A00" : C.line}`, background: showBorder ? "#FBE4D5" : "#fff", color: showBorder ? "#B03A00" : "#666", padding: "3px 8px", fontSize: 10, fontWeight: showBorder ? 700 : 400, borderRadius: 2, cursor: "pointer" }}>
@@ -3556,9 +3605,9 @@ function DocWorks() {
               )}
               {tab === "tree" && sheetSize === "tabloid" && editMode && (
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: 4 }}>
-                  <span style={{ fontSize: 10, color: "#8A6D00", fontWeight: 700 }}>✋ Drag boxes to reposition · right-click a box to set which side lines attach</span>
+                  <span style={{ fontSize: 10, color: "#8A6D00", fontWeight: 700 }}>✋ Drag boxes to reposition · right-click a box for line sides · drag on empty space to zoom that region</span>
                   {(Object.keys(treeNudges).length > 0 || Object.keys(treeAnchors).length > 0) && (
-                    <button onClick={() => { setTreeNudges({}); setTreeAnchors({}); setTextScale({ asm: 1, comp: 1 }); setTreeZoom(1); setShowBorder(true); setTreeFit(false); }}
+                    <button onClick={() => { setTreeNudges({}); setTreeAnchors({}); setTextScale({ asm: 1.2, comp: 1 }); setTreeZoom(1.5); setShowBorder(true); setTreeFit(false); setTreeView(null); }}
                       style={{ border: `1px solid ${C.line}`, background: "#fff", color: "#555", padding: "3px 8px", fontSize: 10, borderRadius: 2, cursor: "pointer" }}>
                       ↺ Reset layout ({Object.keys(treeNudges).length + Object.keys(treeAnchors).length})
                     </button>
@@ -3608,7 +3657,7 @@ function DocWorks() {
             )}
             <div ref={docsRef} contentEditable={editMode} suppressContentEditableWarning
               style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 22, width: "100%", boxShadow: editMode ? "inset 0 0 0 3px rgba(184,134,11,.28)" : "none", borderRadius: editMode ? 4 : 0 }}>
-              {generated && tab === "tree" && <TreeDoc bom={bom} excluded={generated.excluded} tops={generated.tops} cfgName={generated.cfgName} m={m} purchased={generated.purchased || {}} profile={profile} customer={customer} sheetSize={sheetSize} editable={editMode && sheetSize === "tabloid"} nudges={treeNudges} setNudges={setTreeNudges} anchors={treeAnchors} setAnchors={setTreeAnchors} textScale={textScale} zoom={treeZoom} showBorder={showBorder} fit={treeFit} setFit={setTreeFit} />}
+              {generated && tab === "tree" && <TreeDoc bom={bom} excluded={generated.excluded} tops={generated.tops} cfgName={generated.cfgName} m={m} purchased={generated.purchased || {}} profile={profile} customer={customer} sheetSize={sheetSize} editable={editMode && sheetSize === "tabloid"} nudges={treeNudges} setNudges={setTreeNudges} anchors={treeAnchors} setAnchors={setTreeAnchors} textScale={textScale} zoom={treeZoom} showBorder={showBorder} fit={treeFit} setFit={setTreeFit} view={treeView} setView={v => { setTreeView(v); setTreeZoom(1); }} />}
               {generated && tab === "plist" && <PartsListDoc bom={bom} excluded={generated.excluded} tops={generated.tops} cfgName={generated.cfgName} m={m} purchased={generated.purchased || {}} profile={profile} customer={customer} />}
               {generated && tab === "trav" && <TravelerDocs bom={bom} excluded={generated.excluded} tops={generated.tops} m={m} profile={profile} espByPn={espByPn} customer={customer} />}
               {generated && tab === "wi" && <WIDocs bom={bom} excluded={generated.excluded} tops={generated.tops} m={m} profile={profile} espByPn={espByPn} customer={customer} />}
